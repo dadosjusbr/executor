@@ -4,7 +4,7 @@ import (
 	"github.com/dadosjusbr/storage"
 )
 
-//Env is the variables used in the stages.
+//Env represents the variables used in the stages.
 type Env struct {
 	Month          string `envconfig:"MONTH"`
 	Year           string `envconfig:"YEAR"`
