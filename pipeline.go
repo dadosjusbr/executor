@@ -5,13 +5,14 @@ type Stage struct {
 	Name string
 	Dir  string
 	Repo string
-	Envs map[string]string
+	Env  map[string]string
 }
 
 //Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
 	Name        string
 	DefaultRepo string
+	DefaultEnv  map[string]string
 	Stages      []Stage
 }
 
