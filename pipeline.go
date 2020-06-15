@@ -41,7 +41,7 @@ func setup(path string) error {
 		}
 	}
 
-	cmdList := strings.Split(fmt.Sprintf("docker volume create --opt type=none --opt device=%s/output --opt o=bind --name=dadosjusbr", path), " ")
+	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s/output --opt o=bind --name=dadosjusbr", path), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
