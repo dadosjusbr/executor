@@ -3,6 +3,8 @@ package executor
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 )
 
 //Stage is a phase of data release process.
@@ -32,25 +34,24 @@ type StageExecutionResult struct {
 	Env        []string `json:"env,omitempty" bson:"env,omitempty"`       // Copy of strings representing the environment variables in the form ke=value
 }
 
-func setup(dir string) error {
-	if os.IsNotExist(os.Mkdir(dir+"/output", os.ModeDir)) {
-		if err := os.Mkdir(dir+"/output", os.ModeDir); err != nil {
+func setup(path string) error {
+	if os.IsNotExist(os.Mkdir(path+"/output", os.ModeDir)) {
+		if err := os.Mkdir(path+"/output", os.ModeDir); err != nil {
 			return fmt.Errorf("error creating output folder: %q", err)
 		}
 	}
 
-	cmd := "docker volume create --opt type=none --opt device=" + dir + "/output --opt o=bind --name=dadosjusbr"
-	fmt.Println(cmd)
-	//if err := os.exec(cmd); err != nil {
-	//	return fmt.Errorf("error creating output folder: %q", err)
-	//}
+	cmdList := strings.Split(fmt.Sprintf("docker volume create --opt type=none --opt device=%s/output --opt o=bind --name=dadosjusbr", path), " ")
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
+	}
 
 	return nil
 }
 
 //Run executes the pipeline
 func Run(pipeline Pipeline) ([]StageExecutionResult, error) {
-
 	if err := setup(pipeline.DefaultRepo); err != nil {
 		return nil, fmt.Errorf("error in inicial setup. %q", err)
 
