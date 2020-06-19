@@ -68,7 +68,7 @@ func (p *Pipeline) Run(pipeline Pipeline) ([]StageExecutionResult, error) {
 		id := fmt.Sprintf("%s-%s-%s", stage.Name, pipeline.DefaultEnv["month"], pipeline.DefaultEnv["year"])
 		log.Printf("Executing %s ...\n", id)
 
-		er, err = Build(stage.Name, stage.Env["commit"])
+		er, err = build(stage)
 		if err != nil {
 			return nil, fmt.Errorf("error in image build %s", err)
 		}
@@ -80,11 +80,11 @@ func (p *Pipeline) Run(pipeline Pipeline) ([]StageExecutionResult, error) {
 }
 
 // Build tries to build a docker image for a job and panics if it can not suceed.
-func Build(stage, commit string) (StageExecutionResult, error) {
-	id := fmt.Sprintf("%s", stage)
+func build(s Stage) (StageExecutionResult, error) {
+	id := fmt.Sprintf("%s", s.Name)
 	log.Printf("Building image %s...\n", id)
 
-	pi, err := buildImage(stage, commit)
+	pi, err := buildImage(s.Dir, s.Env["commit"])
 	if err != nil {
 		return *pi, fmt.Errorf("Error building DataCollector image %s: %q", id, err)
 	} else if status.Code(pi.ExitStatus) != status.OK {
