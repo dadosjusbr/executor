@@ -56,16 +56,16 @@ func setup(path string) error {
 }
 
 //Run executes the pipeline
-func (p *Pipeline) Run(pipeline Pipeline) ([]StageExecutionResult, error) {
-	if err := setup(pipeline.DefaultRepo); err != nil {
+func (p *Pipeline) Run() ([]StageExecutionResult, error) {
+	if err := setup(p.DefaultRepo); err != nil {
 		return nil, fmt.Errorf("error in inicial setup. %q", err)
 	}
 
-	for _, stage := range pipeline.Stages {
+	for _, stage := range p.Stages {
 		var er StageExecutionResult
 		var err error
 
-		id := fmt.Sprintf("%s-%s-%s", stage.Name, pipeline.DefaultEnv["month"], pipeline.DefaultEnv["year"])
+		id := fmt.Sprintf("%s-%s-%s", stage.Name, p.DefaultEnv["month"], p.DefaultEnv["year"])
 		log.Printf("Executing %s ...\n", id)
 
 		er, err = build(stage)
