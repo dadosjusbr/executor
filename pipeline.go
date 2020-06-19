@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/dadosjusbr/coletores/status"
-	"github.com/dadosjusbr/storage"
 )
 
 //Stage is a phase of data release process.
@@ -57,67 +56,35 @@ func setup(path string) error {
 }
 
 //Run executes the pipeline
-func Run(pipeline Pipeline) ([]StageExecutionResult, error) {
+func (p *Pipeline) Run(pipeline Pipeline) ([]StageExecutionResult, error) {
 	if err := setup(pipeline.DefaultRepo); err != nil {
 		return nil, fmt.Errorf("error in inicial setup. %q", err)
-
-	}
-
-	commit := os.Getenv("GIT_COMMIT")
-	if commit == "" {
-		fmt.Errorf("GIT_COMMIT env var can not be empty")
 	}
 
 	for _, stage := range pipeline.Stages {
 		var er StageExecutionResult
 		var err error
 
-		id := fmt.Sprintf("%s-%d-%d", stage.Name, pipeline.DefaultEnv, pipeline.DefaultEnv)
+		id := fmt.Sprintf("%s-%s-%s", stage.Name, pipeline.DefaultEnv["month"], pipeline.DefaultEnv["year"])
 		log.Printf("Executing %s ...\n", id)
 
-		// Collect Data
-		er.Cr.ProcInfo, err = Build(job, commit, conf)
+		er, err = Build(stage.Name, stage.Env["commit"])
 		if err != nil {
-			er.Cr.AgencyID = filepath.Base(job)
-			//Store Error
-			Build(storeErrDir, commit, conf)
-			execStoreErr(er, conf)
-			continue
-		}
-		er.Cr, err = execDataCollector(job, commit, conf)
-		if err != nil {
-			er.Cr.AgencyID = filepath.Base(job)
-			//Store Error
-			Build(storeErrDir, commit, conf)
-			execStoreErr(er, conf)
-			continue
+			return nil, fmt.Errorf("error in image build %s", err)
 		}
 
+		fmt.Println(er)
 	}
 
 	return []StageExecutionResult{}, nil
 }
 
-func execDataCollector(job, commit string, conf config) (storage.CrawlingResult, error) {
-	id := fmt.Sprintf("%s-%d-%d", job, conf.Month, conf.Year)
-	log.Printf("Executing %s ...\n", id)
-	pi, err := execImage(job, executionResult{}, conf)
-	if err != nil {
-		return storage.CrawlingResult{ProcInfo: *pi}, err
-	}
-	cr, err := genCR(job, commit, pi, conf)
-	if err != nil {
-		return storage.CrawlingResult{ProcInfo: *pi}, fmt.Errorf("Error trying to generate crawling result %s:%q", id, err)
-	}
-	log.Printf("%s executed successfully\n", id)
-	return *cr, nil
-}
-
 // Build tries to build a docker image for a job and panics if it can not suceed.
-func Build(job, commit string, conf config) (storage.ProcInfo, error) {
-	id := fmt.Sprintf("%s-%d-%d", job, conf.Month, conf.Year)
+func Build(stage, commit string) (StageExecutionResult, error) {
+	id := fmt.Sprintf("%s", stage)
 	log.Printf("Building image %s...\n", id)
-	pi, err := buildImage(job, commit)
+
+	pi, err := buildImage(stage, commit)
 	if err != nil {
 		return *pi, fmt.Errorf("Error building DataCollector image %s: %q", id, err)
 	} else if status.Code(pi.ExitStatus) != status.OK {
@@ -128,7 +95,7 @@ func Build(job, commit string, conf config) (storage.ProcInfo, error) {
 }
 
 // build runs a go build for each path. It will also insert the value of main.gitCommit in the binaries.
-func buildImage(dir, commit string) (*storage.ProcInfo, error) {
+func buildImage(dir, commit string) (*StageExecutionResult, error) {
 	cmdList := strings.Split(fmt.Sprintf("docker build --build-arg GIT_COMMIT=%s -t %s .", commit, filepath.Base(dir)), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
@@ -137,7 +104,7 @@ func buildImage(dir, commit string) (*storage.ProcInfo, error) {
 	cmd.Stderr = &errb
 	err := cmd.Run()
 	exitStatus := statusCode(err)
-	procInfo := storage.ProcInfo{
+	procInfo := StageExecutionResult{
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
@@ -146,19 +113,6 @@ func buildImage(dir, commit string) (*storage.ProcInfo, error) {
 		Env:        os.Environ(),
 	}
 	return &procInfo, err
-}
-
-func execStoreErr(er executionResult, conf config) {
-	er.Cr.Month = conf.Month
-	er.Cr.Year = conf.Year
-	id := fmt.Sprintf("storeError-%d-%d", er.Cr.Month, er.Cr.Year)
-	log.Printf("Executing %s ...\n", id)
-	pi, err := execImage(storeErrDir, er, conf)
-	if err != nil {
-		log.Fatalf("Error executing %s: %q. ProcInfo:%+v", id, err, pi)
-	}
-	log.Printf("%s executed successfully\n", id)
-	return
 }
 
 // statusCode returns the exit code returned for the cmd execution.
