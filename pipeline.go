@@ -12,19 +12,21 @@ import (
 	"github.com/dadosjusbr/coletores/status"
 )
 
-//Stage is a phase of data release process.
+const noExitError = -2
+
+// Stage is a phase of data release process.
 type Stage struct {
-	Name string
-	Dir  string
-	Repo string
-	Env  map[string]string
+	Name     string
+	Dir      string
+	Repo     string
+	BuildEnv map[string]string
+	RunEnv   map[string]string
 }
 
-//Pipeline represents the sequence of stages for data release.
+// Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
 	Name        string
 	DefaultRepo string
-	DefaultEnv  map[string]string
 	Stages      []Stage
 }
 
@@ -55,20 +57,23 @@ func setup(path string) error {
 	return nil
 }
 
-//Run executes the pipeline
+// Run executes the pipeline
 func (p *Pipeline) Run() ([]StageExecutionResult, error) {
-	if err := setup(p.DefaultRepo); err != nil {
-		return nil, fmt.Errorf("error in inicial setup. %q", err)
-	}
-
 	for _, stage := range p.Stages {
 		var er StageExecutionResult
 		var err error
 
-		id := fmt.Sprintf("%s-%s-%s", stage.Name, p.DefaultEnv["month"], p.DefaultEnv["year"])
+		if len(stage.Repo) == 0 {
+			stage.Repo = p.DefaultRepo
+		}
+		if err := setup(stage.Repo); err != nil {
+			return nil, fmt.Errorf("error in inicial setup. %q", err)
+		}
+
+		id := fmt.Sprintf("Stage %s: %s", stage.Name, mergeEnv(stage.BuildEnv, stage.RunEnv))
 		log.Printf("Executing %s ...\n", id)
 
-		er, err = build(stage)
+		er, err = build(id, stage.Dir, stage.BuildEnv)
 		if err != nil {
 			return nil, fmt.Errorf("error in image build %s", err)
 		}
@@ -79,24 +84,31 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 	return []StageExecutionResult{}, nil
 }
 
-// Build tries to build a docker image for a job and panics if it can not suceed.
-func build(s Stage) (StageExecutionResult, error) {
-	id := fmt.Sprintf("%s", s.Name)
-	log.Printf("Building image %s...\n", id)
+func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
+	env := make(map[string]string)
 
-	pi, err := buildImage(s.Dir, s.Env["commit"])
-	if err != nil {
-		return *pi, fmt.Errorf("Error building DataCollector image %s: %q", id, err)
-	} else if status.Code(pi.ExitStatus) != status.OK {
-		return *pi, fmt.Errorf("Status code %d(%s) building DataCollector image %s", pi.ExitStatus, status.Text(status.Code(pi.ExitStatus)), id)
+	for k, v := range defaultEnv {
+		env[k] = v
 	}
-	log.Printf("Image %s build sucessfully\n", id)
-	return *pi, nil
+	for k, v := range stageEnv {
+		env[k] = v
+	}
+	return env
 }
 
-// build runs a go build for each path. It will also insert the value of main.gitCommit in the binaries.
-func buildImage(dir, commit string) (*StageExecutionResult, error) {
-	cmdList := strings.Split(fmt.Sprintf("docker build --build-arg GIT_COMMIT=%s -t %s .", commit, filepath.Base(dir)), " ")
+// build tries to build a docker image for a job and panics if it can not suceed.
+func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
+	log.Printf("Building image for stage %s", id)
+
+	var b strings.Builder
+
+	for k, v := range buildEnv {
+		fmt.Fprintf(&b, "--build-arg %s=%s ", k, v)
+	}
+	env := b.String()
+	env = env[:b.Len()-1]
+
+	cmdList := strings.Split(fmt.Sprintf("docker build %s -t %s", env, filepath.Base(dir)), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
@@ -104,7 +116,7 @@ func buildImage(dir, commit string) (*StageExecutionResult, error) {
 	cmd.Stderr = &errb
 	err := cmd.Run()
 	exitStatus := statusCode(err)
-	procInfo := StageExecutionResult{
+	stageResult := StageExecutionResult{
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
@@ -112,7 +124,14 @@ func buildImage(dir, commit string) (*StageExecutionResult, error) {
 		ExitStatus: exitStatus,
 		Env:        os.Environ(),
 	}
-	return &procInfo, err
+
+	if status.Code(stageResult.ExitStatus) != status.OK {
+		return stageResult, fmt.Errorf("Status code %d(%s) building image for stage %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
+	}
+
+	log.Println("Image build sucessfully!")
+
+	return stageResult, nil
 }
 
 // statusCode returns the exit code returned for the cmd execution.
@@ -126,5 +145,5 @@ func statusCode(err error) int {
 	if exitError, ok := err.(*exec.ExitError); ok {
 		return exitError.ExitCode()
 	}
-	return -2
+	return noExitError
 }
