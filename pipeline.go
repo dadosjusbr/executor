@@ -70,7 +70,7 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 			return nil, fmt.Errorf("error in inicial setup. %q", err)
 		}
 
-		id := fmt.Sprintf("Stage %s: %s", stage.Name, mergeEnv(stage.BuildEnv, stage.RunEnv))
+		id := fmt.Sprintf("Stage %s", stage.Name)
 		log.Printf("Executing %s ...\n", id)
 
 		er, err = build(id, stage.Dir, stage.BuildEnv)
@@ -105,8 +105,7 @@ func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, er
 	for k, v := range buildEnv {
 		fmt.Fprintf(&b, "--build-arg %s=%s ", k, v)
 	}
-	env := b.String()
-	env = env[:b.Len()-1]
+	env := strings.TrimRight(b.String(), " ")
 
 	cmdList := strings.Split(fmt.Sprintf("docker build %s -t %s", env, filepath.Base(dir)), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
