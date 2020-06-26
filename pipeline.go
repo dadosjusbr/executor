@@ -13,6 +13,7 @@ import (
 )
 
 const noExitError = -2
+const output = "output"
 
 // Stage is a phase of data release process.
 type Stage struct {
@@ -25,9 +26,11 @@ type Stage struct {
 
 // Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
-	Name        string
-	DefaultRepo string
-	Stages      []Stage
+	Name            string
+	DefaultRepo     string
+	DefaultBuildEnv map[string]string
+	DefaultRunEnv   map[string]string
+	Stages          []Stage
 }
 
 // StageExecutionResult represents information about the execution of a stage.
@@ -42,13 +45,14 @@ type StageExecutionResult struct {
 }
 
 func setup(path string) error {
-	if os.IsNotExist(os.Mkdir(path+"/output", os.ModeDir)) {
-		if err := os.Mkdir(path+"/output", os.ModeDir); err != nil {
+	finalPath := fmt.Sprintf("%s/%s", path, output)
+	if os.IsNotExist(os.Mkdir(finalPath, os.ModeDir)) {
+		if err := os.Mkdir(finalPath, os.ModeDir); err != nil {
 			return fmt.Errorf("error creating output folder: %q", err)
 		}
 	}
 
-	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s/output --opt o=bind --name=dadosjusbr", path), " ")
+	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
@@ -73,12 +77,14 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 		id := fmt.Sprintf("Stage %s", stage.Name)
 		log.Printf("Executing %s ...\n", id)
 
+		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		er, err = build(id, stage.Dir, stage.BuildEnv)
 		if err != nil {
 			return nil, fmt.Errorf("error in image build %s", err)
 		}
-
 		fmt.Println(er)
+
+		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 	}
 
 	return []StageExecutionResult{}, nil
@@ -96,7 +102,6 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 	return env
 }
 
-// build tries to build a docker image for a job and panics if it can not suceed.
 func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
 	log.Printf("Building image for stage %s", id)
 
