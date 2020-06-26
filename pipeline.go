@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dadosjusbr/coletores/status"
+	"github.com/dadosjusbr/executor/status"
 )
 
 const noExitError = -2
