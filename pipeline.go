@@ -74,7 +74,7 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 			return nil, fmt.Errorf("error in inicial setup. %q", err)
 		}
 
-		id := fmt.Sprintf("Stage %s", stage.Name)
+		id := fmt.Sprintf("Pipeline: %s Stage: %s", p.Name, stage.Name)
 		log.Printf("Executing %s ...\n", id)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
