@@ -14,6 +14,7 @@ import (
 
 const noExitError = -2
 const output = "output"
+const dirPermission = 0644
 
 // Stage is a phase of data release process.
 type Stage struct {
@@ -44,9 +45,9 @@ type StageExecutionResult struct {
 	Env        []string `json:"env,omitempty" bson:"env,omitempty"`       // Copy of strings representing the environment variables in the form ke=value
 }
 
-func setup(path string) error {
-	finalPath := fmt.Sprintf("%s/%s", path, output)
-	if os.IsNotExist(os.Mkdir(finalPath, os.ModeDir)) {
+func setup(repo, dir string) error {
+	finalPath := fmt.Sprintf("%s/%s/%s", repo, dir, output)
+	if os.IsNotExist(os.Mkdir(finalPath, dirPermission)) {
 		if err := os.Mkdir(finalPath, os.ModeDir); err != nil {
 			return fmt.Errorf("error creating output folder: %q", err)
 		}
@@ -70,19 +71,19 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 		if len(stage.Repo) == 0 {
 			stage.Repo = p.DefaultRepo
 		}
-		if err := setup(stage.Repo); err != nil {
+		if err := setup(stage.Repo, stage.Dir); err != nil {
 			return nil, fmt.Errorf("error in inicial setup. %q", err)
 		}
 
-		id := fmt.Sprintf("Pipeline: %s Stage: %s", p.Name, stage.Name)
-		log.Printf("Executing %s ...\n", id)
+		id := fmt.Sprintf("Pipeline: %s - Stage: %s", p.Name, stage.Name)
+		log.Printf("Executing %s\n", id)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
-		er, err = build(id, stage.Dir, stage.BuildEnv)
+		er, err = build(id, fmt.Sprintf("%s/%s", stage.Repo, stage.Dir), stage.BuildEnv)
 		if err != nil {
 			return nil, fmt.Errorf("error in image build %s", err)
 		}
-		fmt.Println(er)
+		fmt.Println(er.Stdout)
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 	}
@@ -103,7 +104,7 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 }
 
 func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
-	log.Printf("Building image for stage %s", id)
+	log.Printf("Building image for %s", id)
 
 	var b strings.Builder
 
@@ -112,7 +113,8 @@ func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, er
 	}
 	env := strings.TrimRight(b.String(), " ")
 
-	cmdList := strings.Split(fmt.Sprintf("docker build %s -t %s", env, filepath.Base(dir)), " ")
+	cmdList := strings.Split(fmt.Sprintf("docker build %s -t %s .", env, filepath.Base(dir)), " ")
+
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
@@ -128,6 +130,8 @@ func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, er
 		ExitStatus: exitStatus,
 		Env:        os.Environ(),
 	}
+
+	log.Printf("$ %s", stageResult.Cmd)
 
 	if status.Code(stageResult.ExitStatus) != status.OK {
 		return stageResult, fmt.Errorf("Status code %d(%s) building image for stage %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
