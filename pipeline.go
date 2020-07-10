@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -79,16 +80,32 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 		log.Printf("Executing %s\n", id)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
-		er, err = build(id, fmt.Sprintf("%s/%s", stage.Repo, stage.Dir), stage.BuildEnv)
+		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
+		er, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
-			return nil, fmt.Errorf("error in image build %s", err)
+			storeError("error when building image", err)
 		}
 		fmt.Println(er.Stdout)
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
+		er, err = runImage(id, dir, stage.RunEnv, er.Stdout)
+		if err != nil {
+			storeError("error when running image", err)
+		}
+		fmt.Println(er.Stdout)
 	}
 
 	return []StageExecutionResult{}, nil
+}
+
+func storeError(msg string, err error) error {
+	return fmt.Errorf("%s - %s", msg, err)
+	// TODO: Store error
+	//er.Cr.AgencyID = filepath.Base(job)
+	//Store Error
+	//Build(storeErrDir, commit, conf)
+	//execStoreErr(er, conf)
+	//continue
 }
 
 func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
@@ -103,11 +120,10 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 	return env
 }
 
-func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
+func buildImage(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
 	log.Printf("Building image for %s", id)
 
 	var b strings.Builder
-
 	for k, v := range buildEnv {
 		fmt.Fprintf(&b, "--build-arg %s=%s ", k, v)
 	}
@@ -134,7 +150,7 @@ func build(id, dir string, buildEnv map[string]string) (StageExecutionResult, er
 	log.Printf("$ %s", stageResult.Cmd)
 
 	if status.Code(stageResult.ExitStatus) != status.OK {
-		return stageResult, fmt.Errorf("Status code %d(%s) building image for stage %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
+		return stageResult, fmt.Errorf("Status code %d(%s) when building image for %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
 	}
 
 	log.Println("Image build sucessfully!")
@@ -154,4 +170,49 @@ func statusCode(err error) int {
 		return exitError.ExitCode()
 	}
 	return noExitError
+}
+
+// runImage executes the image designed and returns it's stdin, stdout and exit error if any.
+func runImage(id, dir, stdout string, runEnv map[string]string) (StageExecutionResult, error) {
+	log.Printf("Running image for %s", id)
+
+	stdoutJSON, err := json.Marshal(stdout)
+	if err != nil {
+		return StageExecutionResult{}, fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
+	}
+
+	var builder strings.Builder
+	for key, value := range runEnv {
+		fmt.Fprintf(&builder, "%s=%s ", key, value)
+	}
+	env := strings.TrimRight(builder.String(), " ")
+
+	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", filepath.Base(dir), env), " ")
+
+	cmd := exec.Command("docker", cmdList...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(string(stdoutJSON))
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	//err = cmd.Run()
+	exitStatus := statusCode(err)
+	stageResult := StageExecutionResult{
+		Stdin:      string(stdoutJSON),
+		Stdout:     string(outb.Bytes()),
+		Stderr:     string(errb.Bytes()),
+		Cmd:        strings.Join(cmdList, " "),
+		CmdDir:     cmd.Dir,
+		ExitStatus: exitStatus,
+		Env:        os.Environ(),
+	}
+	log.Printf("$ %s", stageResult.Cmd)
+
+	if status.Code(stageResult.ExitStatus) != status.OK {
+		return stageResult, fmt.Errorf("Status code %d(%s) when running image for %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
+	}
+
+	log.Printf("%s executed successfully\n", id)
+
+	return stageResult, nil
 }
