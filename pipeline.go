@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dadosjusbr/executor/status"
 )
@@ -35,15 +36,31 @@ type Pipeline struct {
 	Stages          []Stage
 }
 
+// CmdResult represents information about a execution of a command.
+type CmdResult struct {
+	Stdin      string   `json:"stdin" bson:"stdin,omitempt"`    // String containing the standard input of the process.
+	Stdout     string   `json:"stdout" bson:"stdout,omitempty"` // String containing the standard output of the process.
+	Stderr     string   `json:"stderr" bson:"stderr,omitempty"` // String containing the standard error of the process.
+	Cmd        string   `json:"cmd" bson:"cmd,omitempty"`       // Command that has been executed.
+	CmdDir     string   `json:"cmdDir" bson:"cmdir,omitempty"`  // Local directory, in which the command has been executed.
+	ExitStatus int      `json:"status" bson:"status,omitempty"` // Exit code of the process executed.
+	Env        []string `json:"env" bson:"env,omitempty"`       // Copy of strings representing the environment variables in the form ke=value.
+}
+
 // StageExecutionResult represents information about the execution of a stage.
 type StageExecutionResult struct {
-	Stdin      string   `json:"stdin" bson:"stdin,omitempty"`             // String containing the standard input of the process.
-	Stdout     string   `json:"stdout" bson:"stdout,omitempty"`           // String containing the standard output of the process.
-	Stderr     string   `json:"stderr" bson:"stderr,omitempty"`           // String containing the standard error of the process.
-	Cmd        string   `json:"cmd" bson:"cmd,omitempty"`                 // Command that has been executed
-	CmdDir     string   `json:"cmddir" bson:"cmdir,omitempty"`            // Local directory, in which the command has been executed
-	ExitStatus int      `json:"status,omitempty" bson:"status,omitempty"` // Exit code of the process executed
-	Env        []string `json:"env,omitempty" bson:"env,omitempty"`       // Copy of strings representing the environment variables in the form ke=value
+	Stage       string    `json:"stage" bson:"stage,omitempty"`             // Name of stage.
+	StartTime   int64     `json:"star" bson:"start,omitempty"`              // Timestamp at start of stage.
+	FinalTime   int64     `json:"end" bson:"end,omitempty"`                 // Timestamp at the end of stage.
+	BuildResult CmdResult `json:"buildResult" bson:"buildResult,omitempty"` // Build result.
+	RunResult   CmdResult `json:"runResult" bson:"runResult,omitempty"`     // Run result.
+}
+
+// PipelineResult represents the pipeline information and their results.
+type PipelineResult struct {
+	Name        string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
+	Timestamp   int64                  `json:"timestamp" bson:"timestamp,omitempty"`     // Timestamp of pipeline execution.
+	StageResult []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
 }
 
 func setup(repo, dir string) error {
@@ -64,38 +81,49 @@ func setup(repo, dir string) error {
 }
 
 // Run executes the pipeline
-func (p *Pipeline) Run() ([]StageExecutionResult, error) {
-	for _, stage := range p.Stages {
+func (p *Pipeline) Run() (PipelineResult, error) {
+	now := time.Now()
+	var result PipelineResult
+	result = PipelineResult{Name: p.Name, Timestamp: now.Unix()}
+
+	for index, stage := range p.Stages {
 		var ser StageExecutionResult
-		var err error
 
 		if len(stage.Repo) == 0 {
 			stage.Repo = p.DefaultRepo
 		}
 		if err := setup(stage.Repo, stage.Dir); err != nil {
-			return nil, fmt.Errorf("error in inicial setup. %q", err)
+			return PipelineResult{}, fmt.Errorf("error in inicial setup. %q", err)
 		}
 
-		id := fmt.Sprintf("Pipeline: %s - Stage: %s", p.Name, stage.Name)
-		log.Printf("Executing %s\n", id)
+		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
+		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index, len(p.Stages))
+
+		now = time.Now()
+		ser.Stage = stage.Name
+		ser.StartTime = now.Unix()
+		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
-		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
-		ser, err = buildImage(id, dir, stage.BuildEnv)
-		if err != nil {
+		if err := buildImage(id, dir, stage.BuildEnv, &ser.BuildResult); err != nil {
 			storeError("error when building image", err)
 		}
-		fmt.Println(ser.Stdout)
 
+		stdout := ""
+		if index != 0 {
+			stdout = result.StageResult[index-1].RunResult.Stdout
+		}
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
-		ser, err = runImage(id, dir, ser.Stdout, stage.RunEnv)
-		if err != nil {
+		if err := runImage(id, dir, stdout, stage.RunEnv, &ser.RunResult); err != nil {
 			storeError("error when running image", err)
 		}
-		fmt.Println(ser.Stdout)
+
+		now = time.Now()
+		ser.FinalTime = now.Unix()
+		result.StageResult = append(result.StageResult, ser)
 	}
 
-	return []StageExecutionResult{}, nil
+	return result, nil
 }
 
 func storeError(msg string, err error) error {
@@ -120,7 +148,7 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 	return env
 }
 
-func buildImage(id, dir string, buildEnv map[string]string) (StageExecutionResult, error) {
+func buildImage(id, dir string, buildEnv map[string]string, result *CmdResult) error {
 	log.Printf("Building image for %s", id)
 
 	var b strings.Builder
@@ -137,25 +165,22 @@ func buildImage(id, dir string, buildEnv map[string]string) (StageExecutionResul
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 	err := cmd.Run()
-	exitStatus := statusCode(err)
-	stageResult := StageExecutionResult{
-		Stdout:     string(outb.Bytes()),
-		Stderr:     string(errb.Bytes()),
-		Cmd:        strings.Join(cmdList, " "),
-		CmdDir:     dir,
-		ExitStatus: exitStatus,
-		Env:        os.Environ(),
-	}
+	result.Stdout = string(outb.Bytes())
+	result.Stderr = string(errb.Bytes())
+	result.Cmd = strings.Join(cmdList, " ")
+	result.CmdDir = dir
+	result.ExitStatus = statusCode(err)
+	result.Env = os.Environ()
 
-	log.Printf("$ %s", stageResult.Cmd)
+	log.Printf("$ %s", result.Cmd)
 
-	if status.Code(stageResult.ExitStatus) != status.OK {
-		return stageResult, fmt.Errorf("Status code %d(%s) when building image for %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
+	if status.Code(result.ExitStatus) != status.OK {
+		return fmt.Errorf("Status code %d(%s) when building image for %s", result.ExitStatus, status.Text(status.Code(result.ExitStatus)), id)
 	}
 
 	log.Println("Image build sucessfully!")
 
-	return stageResult, nil
+	return nil
 }
 
 // statusCode returns the exit code returned for the cmd execution.
@@ -173,12 +198,12 @@ func statusCode(err error) int {
 }
 
 // runImage executes the image designed and returns it's stdin, stdout and exit error if any.
-func runImage(id, dir, stdout string, runEnv map[string]string) (StageExecutionResult, error) {
+func runImage(id, dir, stdout string, runEnv map[string]string, result *CmdResult) error {
 	log.Printf("Running image for %s", id)
 
 	stdoutJSON, err := json.Marshal(stdout)
 	if err != nil {
-		return StageExecutionResult{}, fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
+		return fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
 	}
 
 	var builder strings.Builder
@@ -195,23 +220,20 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (StageExecutionR
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 	err = cmd.Run()
-	exitStatus := statusCode(err)
-	stageResult := StageExecutionResult{
-		Stdin:      string(stdoutJSON),
-		Stdout:     string(outb.Bytes()),
-		Stderr:     string(errb.Bytes()),
-		Cmd:        strings.Join(cmdList, " "),
-		CmdDir:     cmd.Dir,
-		ExitStatus: exitStatus,
-		Env:        os.Environ(),
-	}
-	log.Printf("$ %s", stageResult.Cmd)
+	result.Stdout = string(outb.Bytes())
+	result.Stderr = string(errb.Bytes())
+	result.Cmd = strings.Join(cmdList, " ")
+	result.CmdDir = dir
+	result.ExitStatus = statusCode(err)
+	result.Env = os.Environ()
 
-	if status.Code(stageResult.ExitStatus) != status.OK {
-		return stageResult, fmt.Errorf("Status code %d(%s) when running image for %s", stageResult.ExitStatus, status.Text(status.Code(stageResult.ExitStatus)), id)
+	log.Printf("$ %s", result.Cmd)
+
+	if status.Code(result.ExitStatus) != status.OK {
+		return fmt.Errorf("Status code %d(%s) when running image for %s", result.ExitStatus, status.Text(status.Code(result.ExitStatus)), id)
 	}
 
 	log.Printf("%s executed successfully\n", id)
 
-	return stageResult, nil
+	return nil
 }
