@@ -66,7 +66,7 @@ func setup(repo, dir string) error {
 // Run executes the pipeline
 func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 	for _, stage := range p.Stages {
-		var er StageExecutionResult
+		var ser StageExecutionResult
 		var err error
 
 		if len(stage.Repo) == 0 {
@@ -81,18 +81,18 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
-		er, err = buildImage(id, dir, stage.BuildEnv)
+		ser, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
 			storeError("error when building image", err)
 		}
-		fmt.Println(er.Stdout)
+		fmt.Println(ser.Stdout)
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
-		er, err = runImage(id, dir, er.Stdout, stage.RunEnv)
+		ser, err = runImage(id, dir, ser.Stdout, stage.RunEnv)
 		if err != nil {
 			storeError("error when running image", err)
 		}
-		fmt.Println(er.Stdout)
+		fmt.Println(ser.Stdout)
 	}
 
 	return []StageExecutionResult{}, nil
@@ -194,7 +194,7 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (StageExecutionR
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
-	//err = cmd.Run()
+	err = cmd.Run()
 	exitStatus := statusCode(err)
 	stageResult := StageExecutionResult{
 		Stdin:      string(stdoutJSON),
