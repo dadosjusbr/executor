@@ -88,7 +88,7 @@ func (p *Pipeline) Run() ([]StageExecutionResult, error) {
 		fmt.Println(er.Stdout)
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
-		er, err = runImage(id, dir, stage.RunEnv, er.Stdout)
+		er, err = runImage(id, dir, er.Stdout, stage.RunEnv)
 		if err != nil {
 			storeError("error when running image", err)
 		}
@@ -188,7 +188,6 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (StageExecutionR
 	env := strings.TrimRight(builder.String(), " ")
 
 	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", filepath.Base(dir), env), " ")
-
 	cmd := exec.Command("docker", cmdList...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(string(stdoutJSON))
