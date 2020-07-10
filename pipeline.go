@@ -83,8 +83,7 @@ func setup(repo, dir string) error {
 // Run executes the pipeline
 func (p *Pipeline) Run() (PipelineResult, error) {
 	now := time.Now()
-	var result PipelineResult
-	result = PipelineResult{Name: p.Name, Timestamp: now.Unix()}
+	result := PipelineResult{Name: p.Name, Timestamp: now.Unix()}
 
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
