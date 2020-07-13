@@ -50,7 +50,7 @@ type CmdResult struct {
 // StageExecutionResult represents information about the execution of a stage.
 type StageExecutionResult struct {
 	Stage       string    `json:"stage" bson:"stage,omitempty"`             // Name of stage.
-	StartTime   int64     `json:"star" bson:"start,omitempty"`              // Timestamp at start of stage.
+	StartTime   int64     `json:"start" bson:"start,omitempty"`             // Timestamp at start of stage.
 	FinalTime   int64     `json:"end" bson:"end,omitempty"`                 // Timestamp at the end of stage.
 	BuildResult CmdResult `json:"buildResult" bson:"buildResult,omitempty"` // Build result.
 	RunResult   CmdResult `json:"runResult" bson:"runResult,omitempty"`     // Run result.
@@ -82,8 +82,7 @@ func setup(repo, dir string) error {
 
 // Run executes the pipeline
 func (p *Pipeline) Run() (PipelineResult, error) {
-	now := time.Now()
-	result := PipelineResult{Name: p.Name, Timestamp: now.Unix()}
+	result := PipelineResult{Name: p.Name, Timestamp: time.Now().Unix()}
 
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
@@ -96,11 +95,10 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		}
 
 		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
-		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index, len(p.Stages))
+		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index+1, len(p.Stages))
 
-		now = time.Now()
 		ser.Stage = stage.Name
-		ser.StartTime = now.Unix()
+		ser.StartTime = time.Now().Unix()
 		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
@@ -112,13 +110,13 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		if index != 0 {
 			stdout = result.StageResult[index-1].RunResult.Stdout
 		}
+		fmt.Printf("Testando: %s ---- %s\n", id, stdout)
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 		if err := runImage(id, dir, stdout, stage.RunEnv, &ser.RunResult); err != nil {
 			storeError("error when running image", err)
 		}
 
-		now = time.Now()
-		ser.FinalTime = now.Unix()
+		ser.FinalTime = time.Now().Unix()
 		result.StageResult = append(result.StageResult, ser)
 	}
 
@@ -154,9 +152,9 @@ func buildImage(id, dir string, buildEnv map[string]string, result *CmdResult) e
 	for k, v := range buildEnv {
 		fmt.Fprintf(&b, "--build-arg %s=%s ", k, v)
 	}
-	env := strings.TrimRight(b.String(), " ")
+	env := b.String()
 
-	cmdList := strings.Split(fmt.Sprintf("docker build %s -t %s .", env, filepath.Base(dir)), " ")
+	cmdList := strings.Split(fmt.Sprintf("docker build %s-t %s .", env, filepath.Base(dir)), " ")
 
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
@@ -232,7 +230,7 @@ func runImage(id, dir, stdout string, runEnv map[string]string, result *CmdResul
 		return fmt.Errorf("Status code %d(%s) when running image for %s", result.ExitStatus, status.Text(status.Code(result.ExitStatus)), id)
 	}
 
-	log.Printf("%s executed successfully\n", id)
+	log.Printf("%s executed successfully\n\n", id)
 
 	return nil
 }
