@@ -28,14 +28,20 @@ func main() {
 		"GIT_COMMIT": out.String(),
 	}
 
+	collectRunEnv := map[string]string{
+		"--mes": "04",
+		"--ano": "2019",
+	}
+
 	p := executor.Pipeline{}
-	p.Name = "MPPB"
+	p.Name = "TRT13"
 	p.DefaultRepo = repo
 	p.Stages = []executor.Stage{
 		{
 			Name:     "Coleta",
-			Dir:      "mppb",
+			Dir:      "trt13",
 			BuildEnv: collectBuildEnv,
+			RunEnv:   collectRunEnv,
 		},
 	}
 
