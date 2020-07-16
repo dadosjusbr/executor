@@ -60,12 +60,10 @@ type StageExecutionResult struct {
 type PipelineResult struct {
 	Name          string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
-	StartTime     int64                  `json:"timestamp" bson:"timestamp,omitempty"`     // Timestamp at start of pipeline.
-	FinalTime     int64                  `json:"timestamp" bson:"timestamp,omitempty"`     // Timestamp at end of pipeline.
+	StartTime     int64                  `json:"start" bson:"start,omitempty"`             // Timestamp at start of pipeline.
+	FinalTime     int64                  `json:"final" bson:"final,omitempty"`             // Timestamp at end of pipeline.
 	Stderr        string                 `json:"error" bson:"error,omitempty"`
 }
-
-// Nesse caso não seria melhor StagesResults?
 
 func setup(repo, dir string) error {
 	finalPath := fmt.Sprintf("%s/%s/%s", repo, dir, output)
@@ -90,6 +88,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
+		var err error
 
 		if len(stage.Repo) == 0 {
 			stage.Repo = p.DefaultRepo
@@ -113,7 +112,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 		stdout := ""
 		if index != 0 {
-			stdout = result.StageResult[index-1].RunResult.Stdout
+			stdout = result.StagesResults[index-1].RunResult.Stdout
 		}
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
@@ -123,7 +122,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		}
 
 		ser.FinalTime = time.Now().Unix()
-		result.StageResult = append(result.StageResult, ser)
+		result.StagesResults = append(result.StagesResults, ser)
 	}
 
 	return result, nil
@@ -151,7 +150,7 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 	return env
 }
 
-func buildImage(id, dir string, buildEnv map[string]string, result *CmdResult) (CmdResult, error) {
+func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 	log.Printf("Building image for %s", id)
 
 	var b strings.Builder
@@ -177,10 +176,10 @@ func buildImage(id, dir string, buildEnv map[string]string, result *CmdResult) (
 		ExitStatus: exitStatus,
 		Env:        os.Environ(),
 	}
-	log.Printf("$ %s", result.Cmd)
+	log.Printf("$ %s", cmdResult.Cmd)
 
-	if status.Code(result.ExitStatus) != status.OK {
-		return cmdResult, fmt.Errorf("Status code %d(%s) when building image for %s", result.ExitStatus, status.Text(status.Code(result.ExitStatus)), id)
+	if status.Code(cmdResult.ExitStatus) != status.OK {
+		return cmdResult, fmt.Errorf("Status code %d(%s) when building image for %s", cmdResult.ExitStatus, status.Text(status.Code(cmdResult.ExitStatus)), id)
 	}
 
 	log.Println("Image build sucessfully!")
@@ -203,7 +202,7 @@ func statusCode(err error) int {
 }
 
 // runImage executes the image designed and returns it's stdin, stdout and exit error if any.
-func runImage(id, dir, stdout string, runEnv map[string]string, result *CmdResult) (CmdResult, error) {
+func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
 
 	stdoutJSON, err := json.Marshal(stdout)
@@ -236,10 +235,10 @@ func runImage(id, dir, stdout string, runEnv map[string]string, result *CmdResul
 		Env:        os.Environ(),
 	}
 
-	log.Printf("$ %s", result.Cmd)
+	log.Printf("$ %s", cmdResult.Cmd)
 
-	if status.Code(result.ExitStatus) != status.OK {
-		return cmdResult, fmt.Errorf("Status code %d(%s) when running image for %s", result.ExitStatus, status.Text(status.Code(result.ExitStatus)), id)
+	if status.Code(cmdResult.ExitStatus) != status.OK {
+		return cmdResult, fmt.Errorf("Status code %d(%s) when running image for %s", cmdResult.ExitStatus, status.Text(status.Code(cmdResult.ExitStatus)), id)
 	}
 
 	log.Printf("%s executed successfully\n\n", id)
