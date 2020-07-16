@@ -50,8 +50,8 @@ type CmdResult struct {
 // StageExecutionResult represents information about the execution of a stage.
 type StageExecutionResult struct {
 	Stage       string    `json:"stage" bson:"stage,omitempty"`             // Name of stage.
-	StartTime   int64     `json:"start" bson:"start,omitempty"`             // Timestamp at start of stage.
-	FinalTime   int64     `json:"end" bson:"end,omitempty"`                 // Timestamp at the end of stage.
+	StartTime   time.Time `json:"start" bson:"start,omitempty"`             // Time at start of stage.
+	FinalTime   time.Time `json:"end" bson:"end,omitempty"`                 // Time at the end of stage.
 	BuildResult CmdResult `json:"buildResult" bson:"buildResult,omitempty"` // Build result.
 	RunResult   CmdResult `json:"runResult" bson:"runResult,omitempty"`     // Run result.
 }
@@ -60,8 +60,8 @@ type StageExecutionResult struct {
 type PipelineResult struct {
 	Name          string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
-	StartTime     int64                  `json:"start" bson:"start,omitempty"`             // Timestamp at start of pipeline.
-	FinalTime     int64                  `json:"final" bson:"final,omitempty"`             // Timestamp at end of pipeline.
+	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
+	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
 	// Todo: checagem e atribuição de status
 	Status string `json:"status" bson:"status,omitempty"` // String to inform if the pipepine has finished with sucess or not.
 }
@@ -85,7 +85,7 @@ func setup(repo, dir string) error {
 
 // Run executes the pipeline
 func (p *Pipeline) Run() (PipelineResult, error) {
-	result := PipelineResult{Name: p.Name, StartTime: time.Now().Unix()}
+	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
@@ -102,13 +102,16 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index+1, len(p.Stages))
 
 		ser.Stage = stage.Name
-		ser.StartTime = time.Now().Unix()
+		ser.StartTime = time.Now()
 		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
 			storeError("error when building image", err)
+		}
+		if status.Code(ser.BuildResult.ExitStatus) != status.OK {
+			storeError("error when building image", fmt.Errorf("Status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id))
 		}
 
 		stdout := ""
@@ -121,16 +124,20 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		if err != nil {
 			storeError("error when running image", err)
 		}
+		if status.Code(ser.RunResult.ExitStatus) != status.OK {
+			storeError("error when running image", fmt.Errorf("Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id))
+		}
 
-		ser.FinalTime = time.Now().Unix()
+		ser.FinalTime = time.Now()
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
+	result.FinalTime = time.Now()
 	return result, nil
 }
 
 func storeError(msg string, err error) error {
-	return fmt.Errorf("%s - %s", msg, err)
+	return fmt.Errorf("%s: %s", msg, err)
 	// TODO: Store error
 	//er.Cr.AgencyID = filepath.Base(job)
 	//Store Error
@@ -169,16 +176,13 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 
 	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err := cmd.Run()
-	exitStatus := statusCode(err)
-
-	if status.Code(exitStatus) != status.OK {
+	if err != nil {
 		cmdResultError := CmdResult{
-			Stderr:     string(errb.Bytes()),
+			ExitStatus: statusCode(err),
 			Cmd:        strings.Join(cmdList, " "),
 			CmdDir:     dir,
-			ExitStatus: exitStatus,
 		}
-		return cmdResultError, fmt.Errorf("Status code %d(%s) when building image for %s", exitStatus, status.Text(status.Code(exitStatus)), id)
+		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
 
 	cmdResult := CmdResult{
@@ -186,7 +190,7 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
 		CmdDir:     dir,
-		ExitStatus: exitStatus,
+		ExitStatus: statusCode(err),
 		Env:        os.Environ(),
 	}
 	log.Println("Image build sucessfully!")
@@ -233,24 +237,22 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 
 	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err = cmd.Run()
-	exitStatus := statusCode(err)
-
-	if status.Code(exitStatus) != status.OK {
+	if err != nil {
 		cmdResultError := CmdResult{
-			Stderr:     string(errb.Bytes()),
+			ExitStatus: statusCode(err),
 			Cmd:        strings.Join(cmdList, " "),
-			CmdDir:     cmd.Dir,
-			ExitStatus: exitStatus,
+			CmdDir:     dir,
 		}
-		return cmdResultError, fmt.Errorf("Status code %d(%s) when running image for %s", exitStatus, status.Text(status.Code(exitStatus)), id)
+		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
+
 	cmdResult := CmdResult{
 		Stdin:      string(stdoutJSON),
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
 		CmdDir:     cmd.Dir,
-		ExitStatus: exitStatus,
+		ExitStatus: statusCode(err),
 		Env:        os.Environ(),
 	}
 	log.Printf("%s executed successfully\n\n", id)
