@@ -62,7 +62,8 @@ type PipelineResult struct {
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
 	StartTime     int64                  `json:"start" bson:"start,omitempty"`             // Timestamp at start of pipeline.
 	FinalTime     int64                  `json:"final" bson:"final,omitempty"`             // Timestamp at end of pipeline.
-	Stderr        string                 `json:"error" bson:"error,omitempty"`
+	// Todo: checagem e atribuição de status
+	Status string `json:"status" bson:"status,omitempty"` // String to inform if the pipepine has finished with sucess or not.
 }
 
 func setup(repo, dir string) error {
@@ -160,14 +161,26 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 	env := b.String()
 
 	cmdList := strings.Split(fmt.Sprintf("docker build %s-t %s .", env, filepath.Base(dir)), " ")
-
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
+
+	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err := cmd.Run()
 	exitStatus := statusCode(err)
+
+	if status.Code(exitStatus) != status.OK {
+		cmdResultError := CmdResult{
+			Stderr:     string(errb.Bytes()),
+			Cmd:        strings.Join(cmdList, " "),
+			CmdDir:     dir,
+			ExitStatus: exitStatus,
+		}
+		return cmdResultError, fmt.Errorf("Status code %d(%s) when building image for %s", exitStatus, status.Text(status.Code(exitStatus)), id)
+	}
+
 	cmdResult := CmdResult{
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
@@ -176,12 +189,6 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 		ExitStatus: exitStatus,
 		Env:        os.Environ(),
 	}
-	log.Printf("$ %s", cmdResult.Cmd)
-
-	if status.Code(cmdResult.ExitStatus) != status.OK {
-		return cmdResult, fmt.Errorf("Status code %d(%s) when building image for %s", cmdResult.ExitStatus, status.Text(status.Code(cmdResult.ExitStatus)), id)
-	}
-
 	log.Println("Image build sucessfully!")
 
 	return cmdResult, nil
@@ -223,8 +230,20 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
+
+	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err = cmd.Run()
 	exitStatus := statusCode(err)
+
+	if status.Code(exitStatus) != status.OK {
+		cmdResultError := CmdResult{
+			Stderr:     string(errb.Bytes()),
+			Cmd:        strings.Join(cmdList, " "),
+			CmdDir:     cmd.Dir,
+			ExitStatus: exitStatus,
+		}
+		return cmdResultError, fmt.Errorf("Status code %d(%s) when running image for %s", exitStatus, status.Text(status.Code(exitStatus)), id)
+	}
 	cmdResult := CmdResult{
 		Stdin:      string(stdoutJSON),
 		Stdout:     string(outb.Bytes()),
@@ -234,13 +253,6 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 		ExitStatus: exitStatus,
 		Env:        os.Environ(),
 	}
-
-	log.Printf("$ %s", cmdResult.Cmd)
-
-	if status.Code(cmdResult.ExitStatus) != status.OK {
-		return cmdResult, fmt.Errorf("Status code %d(%s) when running image for %s", cmdResult.ExitStatus, status.Text(status.Code(cmdResult.ExitStatus)), id)
-	}
-
 	log.Printf("%s executed successfully\n\n", id)
 
 	return cmdResult, nil
