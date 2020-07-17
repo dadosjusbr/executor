@@ -176,11 +176,11 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 
 	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err := cmd.Run()
-	if err != nil {
+	switch err.(type) {
+	case *exec.Error:
 		cmdResultError := CmdResult{
 			ExitStatus: statusCode(err),
 			Cmd:        strings.Join(cmdList, " "),
-			CmdDir:     dir,
 		}
 		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
@@ -237,11 +237,11 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 
 	log.Printf("$ %s", strings.Join(cmdList, " "))
 	err = cmd.Run()
-	if err != nil {
+	switch err.(type) {
+	case *exec.Error:
 		cmdResultError := CmdResult{
 			ExitStatus: statusCode(err),
 			Cmd:        strings.Join(cmdList, " "),
-			CmdDir:     dir,
 		}
 		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
