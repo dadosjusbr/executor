@@ -43,6 +43,10 @@ func main() {
 			BuildEnv: collectBuildEnv,
 			RunEnv:   collectRunEnv,
 		},
+		{
+			Name: "Empacotador",
+			Dir:  "trt13",
+		},
 	}
 
 	_, err := p.Run()
