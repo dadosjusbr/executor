@@ -16,7 +16,7 @@ import (
 
 const noExitError = -2
 const output = "output"
-const dirPermission = 0644
+const dirPermission = 0666
 
 // Stage is a phase of data release process.
 type Stage struct {
@@ -63,19 +63,27 @@ type PipelineResult struct {
 	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
 	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
 	// Todo: checagem e atribuição de status
-	Status string `json:"status" bson:"status,omitempty"` // String to inform if the pipepine has finished with sucess or not.
+	Status status.Code `json:"status" bson:"status,omitempty"` // String to inform if the pipepine has finished with sucess or not.
 }
 
-func setup(repo, dir string) error {
-	finalPath := fmt.Sprintf("%s/%s/%s", repo, dir, output)
-	if os.IsNotExist(os.Mkdir(finalPath, dirPermission)) {
-		if err := os.Mkdir(finalPath, os.ModeDir); err != nil {
-			return fmt.Errorf("error creating output folder: %q", err)
-		}
+func setup(repo string) error {
+	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error removing existing volume dadosjusbr: %q", err)
 	}
 
-	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	finalPath := fmt.Sprintf("%s/%s", repo, output)
+	if err := os.RemoveAll(finalPath); err != nil {
+		return fmt.Errorf("error removing existing output folder: %q", err)
+	}
+
+	if err := os.Mkdir(finalPath, dirPermission); err != nil {
+		return fmt.Errorf("error creating output folder: %q", err)
+	}
+
+	cmdList = strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
+	cmd = exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
 	}
@@ -83,27 +91,29 @@ func setup(repo, dir string) error {
 	return nil
 }
 
-// Run executes the pipeline
+// Run executes the pipeline.
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
+
+	if err := setup(p.DefaultRepo); err != nil {
+		result.Status = status.SetupError
+		return result, fmt.Errorf("error in inicial setup. %q", err)
+	}
 
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
 		var err error
+		ser.Stage = stage.Name
+		ser.StartTime = time.Now()
 
 		if len(stage.Repo) == 0 {
 			stage.Repo = p.DefaultRepo
 		}
-		if err := setup(stage.Repo, stage.Dir); err != nil {
-			return PipelineResult{}, fmt.Errorf("error in inicial setup. %q", err)
-		}
+		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
 
 		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
+		// 'index+1' because the index starts from 0.
 		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index+1, len(p.Stages))
-
-		ser.Stage = stage.Name
-		ser.StartTime = time.Now()
-		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
 
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
@@ -116,6 +126,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 		stdout := ""
 		if index != 0 {
+			// 'index-1' is accessing the output from previous stage.
 			stdout = result.StagesResults[index-1].RunResult.Stdout
 		}
 
@@ -223,12 +234,12 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 
 	var builder strings.Builder
 	for key, value := range runEnv {
-		fmt.Fprintf(&builder, "%s=%s ", key, value)
+		fmt.Fprintf(&builder, "--env %s=%s ", key, value)
 	}
 	env := strings.TrimRight(builder.String(), " ")
 
-	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", filepath.Base(dir), env), " ")
-	cmd := exec.Command("docker", cmdList...)
+	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir)), " ")
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(string(stdoutJSON))
 	var outb, errb bytes.Buffer
