@@ -24,6 +24,15 @@ const (
 
 	// Unknown means that something unexpected has happend
 	Unknown Code = 6
+
+	// SetupError errors should be used for scenarios with setup problemns, like fail on create the volume for containers.
+	SetupError Code = 7
+
+	// BuildError errors should be used for scenarios with 'docker build' problemns.
+	BuildError Code = 8
+
+	// RunError errors should be used for scenarios with 'docker run' problemns.
+	RunError Code = 9
 )
 
 var (
