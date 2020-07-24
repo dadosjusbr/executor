@@ -64,7 +64,7 @@ type PipelineResult struct {
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
 	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
 	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
-	Status        status.Code            `json:"status" bson:"status,omitempty"`           // String to inform if the pipepine has finished with sucess or not.
+	Status        status.Code            `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError).
 }
 
 func setup(repo string) error {
