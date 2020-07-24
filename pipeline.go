@@ -18,7 +18,6 @@ const (
 	noExitError   = -2
 	output        = "output"
 	dirPermission = 0666
-	storeErrDir   = "store-error" // Refers to directory store-error of the dadosjusbr/coletores repository.
 )
 
 // Stage is a phase of data release process.
@@ -37,7 +36,6 @@ type Pipeline struct {
 	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
 	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
 	Stages          []Stage           // Confguration for the pipeline's stages.
-	StoreErrDir     string            // Directory containing the dockerize script for to store the stage error. If empty, the const storeErrDir will be used.
 }
 
 // CmdResult represents information about a execution of a command.
@@ -169,7 +167,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 func storeError(msg string, err error) error {
 	return fmt.Errorf("%s: %s", msg, err)
-	// TODO: store error
+	// TODO: Store error
 	//er.Cr.AgencyID = filepath.Base(job)
 	//Store Error
 	//Build(storeErrDir, commit, conf)
