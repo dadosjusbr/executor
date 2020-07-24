@@ -1,0 +1,7 @@
+
+# Files .json
+*.json
+*.csv
+
+# Output folder
+/tutorial/output/
