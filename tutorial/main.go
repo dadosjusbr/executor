@@ -15,7 +15,8 @@ func main() {
 	repo := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
 
 	collectRunEnv := map[string]string{
-		"URL": "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
+		"URL":           "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
+		"OUTPUT_FOLDER": "/output",
 	}
 
 	p := executor.Pipeline{}

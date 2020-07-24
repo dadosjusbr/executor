@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,6 +13,11 @@ func main() {
 	if url == "" {
 		log.Fatal("URL env var can not be empty")
 	}
+	output := os.Getenv("OUTPUT_FOLDER")
+	if output == "" {
+		log.Fatal("OUTPUT_FOLDER env var can not be empty")
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
@@ -22,7 +28,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = ioutil.WriteFile("/output/result.json", data, 0644)
+
+	pathFile := fmt.Sprintf("%s/result.json", output)
+	err = ioutil.WriteFile(pathFile, data, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
