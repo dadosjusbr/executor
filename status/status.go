@@ -27,6 +27,15 @@ const (
 
 	// SetupError errors should be used for scenarios with setup problemns, like fail on create the volume for containers.
 	SetupError Code = 7
+<<<<<<< HEAD
+=======
+
+	// BuildError errors should be used for scenarios with 'docker build' problemns.
+	BuildError Code = 8
+
+	// RunError errors should be used for scenarios with 'docker run' problemns.
+	RunError Code = 9
+>>>>>>> 6109c11ea6bc25d7cc6aa2a083ea657b79881766
 )
 
 var (

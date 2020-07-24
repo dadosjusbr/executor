@@ -14,26 +14,28 @@ import (
 	"github.com/dadosjusbr/executor/status"
 )
 
-const noExitError = -2
-const output = "output"
-const dirPermission = 0666
+const (
+	noExitError   = -2
+	output        = "output"
+	dirPermission = 0666
+)
 
 // Stage is a phase of data release process.
 type Stage struct {
-	Name     string
-	Dir      string
-	Repo     string
-	BuildEnv map[string]string
-	RunEnv   map[string]string
+	Name     string            // Stage's name.
+	Dir      string            // Directory to be concatenated with default repository or with the repository specified at the stage.
+	Repo     string            // Repository for the stage. This field overwrites the DefaultRepo in pipeline's definition.
+	BuildEnv map[string]string // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	RunEnv   map[string]string // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 }
 
 // Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
-	Name            string
-	DefaultRepo     string
-	DefaultBuildEnv map[string]string
-	DefaultRunEnv   map[string]string
-	Stages          []Stage
+	Name            string            // Pipeline's name.
+	DefaultRepo     string            // Default repository to be used in the run of all stages.
+	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
+	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
+	Stages          []Stage           // Confguration for the pipeline's stages.
 }
 
 // CmdResult represents information about a execution of a command.
@@ -62,8 +64,7 @@ type PipelineResult struct {
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
 	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
 	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
-	// Todo: checagem e atribuição de status
-	Status status.Code `json:"status" bson:"status,omitempty"` // String to inform if the pipepine has finished with sucess or not.
+	Status        status.Code            `json:"status" bson:"status,omitempty"`           // String to inform if the pipepine has finished with sucess or not.
 }
 
 func setup(repo string) error {
@@ -118,10 +119,18 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
-			storeError("error when building image", err)
+			ser.FinalTime = time.Now()
+			result.StagesResults = append(result.StagesResults, ser)
+			result.Status = status.BuildError
+			result.FinalTime = time.Now()
+			return result, fmt.Errorf("error when building image: %s", err)
 		}
 		if status.Code(ser.BuildResult.ExitStatus) != status.OK {
-			storeError("error when building image", fmt.Errorf("Status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id))
+			ser.FinalTime = time.Now()
+			result.StagesResults = append(result.StagesResults, ser)
+			result.Status = status.BuildError
+			result.FinalTime = time.Now()
+			return result, fmt.Errorf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
 		}
 
 		stdout := ""
@@ -133,16 +142,25 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 		ser.RunResult, err = runImage(id, dir, stdout, stage.RunEnv)
 		if err != nil {
-			storeError("error when running image", err)
+			ser.FinalTime = time.Now()
+			result.StagesResults = append(result.StagesResults, ser)
+			result.Status = status.BuildError
+			result.FinalTime = time.Now()
+			return result, fmt.Errorf("error when running image: %s", err)
 		}
 		if status.Code(ser.RunResult.ExitStatus) != status.OK {
-			storeError("error when running image", fmt.Errorf("Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id))
+			ser.FinalTime = time.Now()
+			result.StagesResults = append(result.StagesResults, ser)
+			result.Status = status.BuildError
+			result.FinalTime = time.Now()
+			return result, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
 		}
 
 		ser.FinalTime = time.Now()
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
+	result.Status = status.OK
 	result.FinalTime = time.Now()
 	return result, nil
 }
