@@ -1,7 +1,9 @@
-
 # Files .json
 *.json
 *.csv
 
 # Output folder
 /tutorial/output/
+
+# Virtual env
+*venv/

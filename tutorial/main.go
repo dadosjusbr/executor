@@ -14,8 +14,12 @@ func main() {
 	goPath := os.Getenv("GOPATH")
 	repo := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
 
-	collectRunEnv := map[string]string{
+	getRunEnv := map[string]string{
 		"URL":           "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
+		"OUTPUT_FOLDER": "/output",
+	}
+
+	convertRunEnv := map[string]string{
 		"OUTPUT_FOLDER": "/output",
 	}
 
@@ -25,8 +29,13 @@ func main() {
 	p.Stages = []executor.Stage{
 		{
 			Name:   "Get data from API Dadosjusbr",
-			Dir:    "stagego",
-			RunEnv: collectRunEnv,
+			Dir:    "stage-go",
+			RunEnv: getRunEnv,
+		},
+		{
+			Name:   "Convert the Dadosjusbr json to csv",
+			Dir:    "stage-python",
+			RunEnv: convertRunEnv,
 		},
 	}
 
