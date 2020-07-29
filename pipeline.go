@@ -23,8 +23,8 @@ const (
 // Stage is a phase of data release process.
 type Stage struct {
 	Name     string            // Stage's name.
-	Dir      string            // Directory to be concatenated with default repository or with the repository specified at the stage.
-	Repo     string            // Repository for the stage. This field overwrites the DefaultRepo in pipeline's definition.
+	Dir      string            // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	BaseDir  string            // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
 	BuildEnv map[string]string // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 	RunEnv   map[string]string // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 }
@@ -32,7 +32,7 @@ type Stage struct {
 // Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
 	Name            string            // Pipeline's name.
-	DefaultRepo     string            // Default repository to be used in the run of all stages.
+	DefaultBaseDir  string            // Default base directory to be used in the run of all stages.
 	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
 	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
 	Stages          []Stage           // Confguration for the pipeline's stages.
@@ -67,14 +67,14 @@ type PipelineResult struct {
 	Status        status.Code            `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError).
 }
 
-func setup(repo string) error {
+func setup(baseDir string) error {
 	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error removing existing volume dadosjusbr: %q", err)
 	}
 
-	finalPath := fmt.Sprintf("%s/%s", repo, output)
+	finalPath := fmt.Sprintf("%s/%s", baseDir, output)
 	if err := os.RemoveAll(finalPath); err != nil {
 		return fmt.Errorf("error removing existing output folder: %q", err)
 	}
@@ -96,7 +96,7 @@ func setup(repo string) error {
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
-	if err := setup(p.DefaultRepo); err != nil {
+	if err := setup(p.DefaultBaseDir); err != nil {
 		result.Status = status.SetupError
 		return result, fmt.Errorf("error in inicial setup. %q", err)
 	}
@@ -107,10 +107,10 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		ser.Stage = stage.Name
 		ser.StartTime = time.Now()
 
-		if len(stage.Repo) == 0 {
-			stage.Repo = p.DefaultRepo
+		if len(stage.BaseDir) == 0 {
+			stage.BaseDir = p.DefaultBaseDir
 		}
-		dir := fmt.Sprintf("%s/%s", stage.Repo, stage.Dir)
+		dir := fmt.Sprintf("%s/%s", stage.BaseDir, stage.Dir)
 
 		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
 		// 'index+1' because the index starts from 0.
