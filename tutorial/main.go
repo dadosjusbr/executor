@@ -12,42 +12,49 @@ import (
 
 func main() {
 	goPath := os.Getenv("GOPATH")
-	repo := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
+	baseDir := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
 
-	getRunEnv := map[string]string{
+	stageGoRunEnv := map[string]string{
 		"URL":           "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
 		"OUTPUT_FOLDER": "/output",
 	}
 
-	convertRunEnv := map[string]string{
+	stagePythonRunEnv := map[string]string{
 		"OUTPUT_FOLDER": "/output",
 	}
 
 	p := executor.Pipeline{}
 	p.Name = "Tutorial"
-	p.DefaultRepo = repo
+	p.DefaultBaseDir = baseDir
 	p.Stages = []executor.Stage{
 		{
 			Name:   "Get data from API Dadosjusbr",
 			Dir:    "stage-go",
-			RunEnv: getRunEnv,
+			RunEnv: stageGoRunEnv,
 		},
 		{
 			Name:   "Convert the Dadosjusbr json to csv",
 			Dir:    "stage-python",
-			RunEnv: convertRunEnv,
+			RunEnv: stagePythonRunEnv,
 		},
 	}
 
 	result, err := p.Run()
 	if err != nil {
+		saveReport(result, "result_pipeline_error.json")
+
 		log.Fatal(err)
 	}
+	saveReport(result, "result_pipeline.json")
+
+}
+
+func saveReport(result executor.PipelineResult, fileName string) {
 	resultJSON, err := json.MarshalIndent(result, "", " ")
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = ioutil.WriteFile("result_pipeline.json", resultJSON, 0644)
+	err = ioutil.WriteFile(fileName, resultJSON, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}

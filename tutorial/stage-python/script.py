@@ -6,9 +6,9 @@ import os
 
 data = sys.stdin.read()  
 data = json.loads(data)
-df = pd.json_normalize(data.get('employees'))
+
+df = pd.json_normalize(data)
 
 output = os.environ['OUTPUT_FOLDER']
-file_name = '{}/{}-{}-{}-{}.csv'.format(output, data.get('aid'), data.get('month'), data.get('year'), data.get('timestamp'))
-
+file_name = '{}/result.csv'.format(output)
 df.to_csv(file_name, index=False)

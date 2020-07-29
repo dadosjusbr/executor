@@ -2,7 +2,6 @@ package executor
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -245,10 +244,10 @@ func statusCode(err error) int {
 func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
 
-	stdoutJSON, err := json.Marshal(stdout)
-	if err != nil {
-		return CmdResult{}, fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
-	}
+	//stdoutJSON, err := json.Marshal(stdout)
+	//if err != nil {
+	//	return CmdResult{}, fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
+	//}
 
 	var builder strings.Builder
 	for key, value := range runEnv {
@@ -259,13 +258,13 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir)), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(string(stdoutJSON))
+	cmd.Stdin = strings.NewReader(stdout)
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 
 	log.Printf("$ %s", strings.Join(cmdList, " "))
-	err = cmd.Run()
+	err := cmd.Run()
 	switch err.(type) {
 	case *exec.Error:
 		cmdResultError := CmdResult{
@@ -276,7 +275,7 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 	}
 
 	cmdResult := CmdResult{
-		Stdin:      string(stdoutJSON),
+		Stdin:      stdout,
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
