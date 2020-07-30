@@ -131,6 +131,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			result.FinalTime = time.Now()
 			return result, fmt.Errorf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
 		}
+		log.Println("Image built sucessfully!")
 
 		stdout := ""
 		if index != 0 {
@@ -154,6 +155,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			result.FinalTime = time.Now()
 			return result, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
 		}
+		log.Printf("Image executed successfully!\n\n")
 
 		ser.FinalTime = time.Now()
 		result.StagesResults = append(result.StagesResults, ser)
@@ -221,7 +223,6 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 		ExitStatus: statusCode(err),
 		Env:        os.Environ(),
 	}
-	log.Println("Image build sucessfully!")
 
 	return cmdResult, nil
 }
@@ -241,13 +242,8 @@ func statusCode(err error) int {
 }
 
 // runImage executes the image designed and returns it's stdin, stdout and exit error if any.
-func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, error) {
+func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
-
-	//stdoutJSON, err := json.Marshal(stdout)
-	//if err != nil {
-	//	return CmdResult{}, fmt.Errorf("Error trying to marshal stage execution result %s", stdoutJSON)
-	//}
 
 	var builder strings.Builder
 	for key, value := range runEnv {
@@ -258,7 +254,7 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir)), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(stdout)
+	cmd.Stdin = strings.NewReader(previousStdout)
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
@@ -275,7 +271,7 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 	}
 
 	cmdResult := CmdResult{
-		Stdin:      stdout,
+		Stdin:      previousStdout,
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
 		Cmd:        strings.Join(cmdList, " "),
@@ -283,7 +279,6 @@ func runImage(id, dir, stdout string, runEnv map[string]string) (CmdResult, erro
 		ExitStatus: statusCode(err),
 		Env:        os.Environ(),
 	}
-	log.Printf("%s executed successfully\n\n", id)
 
 	return cmdResult, nil
 }
