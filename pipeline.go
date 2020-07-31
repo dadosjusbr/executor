@@ -31,7 +31,7 @@ type Stage struct {
 // Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
 	Name            string            // Pipeline's name.
-	DefaultBaseDir  string            // Default base directory to be used in the run of all stages.
+	DefaultBaseDir  string            // Default base directory to be used in all stages.
 	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
 	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
 	Stages          []Stage           // Confguration for the pipeline's stages.
@@ -165,7 +165,11 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
-	cleanSetup()
+	if err := cleanSetup(); err != nil {
+		result.Status = status.SetupError
+		return result, fmt.Errorf("error in inicial setup. %q", err)
+	}
+
 	result.Status = status.OK
 	result.FinalTime = time.Now()
 
