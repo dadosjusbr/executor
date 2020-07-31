@@ -165,7 +165,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
-	if err := cleanSetup(); err != nil {
+	if err := clearSetup(); err != nil {
 		result.Status = status.SetupError
 		return result, fmt.Errorf("error in inicial setup. %q", err)
 	}
