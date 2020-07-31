@@ -85,7 +85,7 @@ func setup(baseDir string) error {
 	return nil
 }
 
-func cleanSetup() error {
+func clearSetup() error {
 	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
