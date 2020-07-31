@@ -67,12 +67,6 @@ type PipelineResult struct {
 }
 
 func setup(baseDir string) error {
-	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error removing existing volume dadosjusbr: %q", err)
-	}
-
 	finalPath := fmt.Sprintf("%s/%s", baseDir, output)
 	if err := os.RemoveAll(finalPath); err != nil {
 		return fmt.Errorf("error removing existing output folder: %q", err)
@@ -82,10 +76,20 @@ func setup(baseDir string) error {
 		return fmt.Errorf("error creating output folder: %q", err)
 	}
 
-	cmdList = strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
-	cmd = exec.Command(cmdList[0], cmdList[1:]...)
+	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
+	}
+
+	return nil
+}
+
+func cleanSetup() error {
+	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
+	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error removing existing volume dadosjusbr: %q", err)
 	}
 
 	return nil
@@ -161,8 +165,10 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
+	cleanSetup()
 	result.Status = status.OK
 	result.FinalTime = time.Now()
+
 	return result, nil
 }
 
