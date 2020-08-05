@@ -30,8 +30,10 @@ func main() {
 	}
 
 	pathFile := fmt.Sprintf("%s/result.json", output)
-	err = ioutil.WriteFile(pathFile, data, 0644)
+	err = ioutil.WriteFile(pathFile, data, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println(string(data))
 }
