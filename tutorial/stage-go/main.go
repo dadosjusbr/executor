@@ -22,6 +22,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if resp.StatusCode != 200 {
+		log.Fatalf("http status is not 200 OK. request returned the %d status", resp.StatusCode)
+	}
 	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
