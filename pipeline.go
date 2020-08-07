@@ -132,11 +132,11 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
 			m := fmt.Sprintf("error when building image: %s", err)
-			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
+			return errorHandler(&result, ser, status.BuildError, m, p.ErrorHandler)
 		}
 		if status.Code(ser.BuildResult.ExitStatus) != status.OK {
 			m := fmt.Sprintf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
-			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
+			return errorHandler(&result, ser, status.BuildError, m, p.ErrorHandler)
 
 		}
 		log.Println("Image built sucessfully!")
