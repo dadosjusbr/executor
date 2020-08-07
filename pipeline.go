@@ -35,7 +35,7 @@ type Pipeline struct {
 	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
 	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
 	Stages          []Stage           // Confguration for the pipeline's stages.
-	HandlerError    Stage             // Default stage to deal with any errors that occur in the execution of the pipeline.
+	ErrorHandler    Stage             // Default stage to deal with any errors that occur in the execution of the pipeline.
 }
 
 // CmdResult represents information about a execution of a command.
@@ -96,7 +96,15 @@ func clearSetup() error {
 	return nil
 }
 
-// Run executes the pipeline.
+// Run executes the pipeline. For each stage defined in the pipeline we execute
+// the `docker build` and `docker run`. If any of these two processes fail,
+// we interrupt the flow and the error handler is called. The error handler is a
+// stage like any other, but it is only built and executed in case of an error in
+// the standard flow. If there are any errors in the `docker build` and `docker run`
+// of the error handler, the process is stopped and the error is returned.
+// If a specific error handler has not been defined, the default behavior is to
+// return the error message that occurred in the standard flow along with the
+// structure that describes all the pipeline execution information.
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
@@ -123,12 +131,12 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
-			erroMessage := fmt.Sprintf("error when building image: %s", err)
-			return errorHandler(&result, ser, status.RunError, erroMessage, p.HandlerError)
+			m := fmt.Sprintf("error when building image: %s", err)
+			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
 		if status.Code(ser.BuildResult.ExitStatus) != status.OK {
-			erroMessage := fmt.Sprintf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
-			return errorHandler(&result, ser, status.RunError, erroMessage, p.HandlerError)
+			m := fmt.Sprintf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
+			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
 
 		}
 		log.Println("Image built sucessfully!")
@@ -142,12 +150,12 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 		ser.RunResult, err = runImage(id, dir, stdout, stage.RunEnv)
 		if err != nil {
-			erroMessage := fmt.Sprintf("error when running image: %s", err)
-			return errorHandler(&result, ser, status.RunError, erroMessage, p.HandlerError)
+			m := fmt.Sprintf("error when running image: %s", err)
+			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
 		if status.Code(ser.RunResult.ExitStatus) != status.OK {
-			erroMessage := fmt.Sprintf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
-			return errorHandler(&result, ser, status.RunError, erroMessage, p.HandlerError)
+			m := fmt.Sprintf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
+			return errorHandler(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
 		log.Printf("Image executed successfully!\n\n")
 
@@ -176,13 +184,16 @@ func errorHandler(result *PipelineResult, ser StageExecutionResult, previousStat
 		if err != nil {
 			result.Status = status.ErrorHandlerError
 			result.FinalTime = time.Now()
-			return *result, fmt.Errorf("error when building image: %s", err)
+
+			// Ser mais específica na mensagem de erro, dizendo especificando que é o error handler?
+
+			return *result, fmt.Errorf("error when building image for error handler: %s", err)
 		}
 		if status.Code(buildResult.ExitStatus) != status.OK {
 			result.Status = status.ErrorHandlerError
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", buildResult.ExitStatus, status.Text(status.Code(buildResult.ExitStatus)), id)
+			return *result, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", buildResult.ExitStatus, status.Text(status.Code(buildResult.ExitStatus)), id)
 		}
 
 		runResult, err := runImage(id, handler.Dir, string(previousStatus), handler.RunEnv)
@@ -190,13 +201,13 @@ func errorHandler(result *PipelineResult, ser StageExecutionResult, previousStat
 			result.Status = status.ErrorHandlerError
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image: %s", err)
+			return *result, fmt.Errorf("error when running image for error handler: %s", err)
 		}
 		if status.Code(runResult.ExitStatus) != status.OK {
 			result.Status = status.ErrorHandlerError
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", runResult.ExitStatus, status.Text(status.Code(runResult.ExitStatus)), id)
+			return *result, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", runResult.ExitStatus, status.Text(status.Code(runResult.ExitStatus)), id)
 		}
 	}
 
