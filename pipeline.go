@@ -314,7 +314,7 @@ func statusCode(err error) int {
 
 // runImage executes the 'docker run' for a image, considering the
 // parameters defined for it and returns a CmdResult and an error, if any.
-// It uses the stdout from the previous stage, if any, as the stdin for this new command.
+// It uses the stdout from the previous stage as the stdin for this new command.
 func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
 
