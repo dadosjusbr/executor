@@ -169,7 +169,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 	if err := tearDown(); err != nil {
 		result.Status = status.SetupError
-		return result, fmt.Errorf("error in inicial setup. %q", err)
+    return result, fmt.Errorf("error in tearDown: %q", err)
 	}
 
 	result.Status = status.OK
