@@ -6,33 +6,36 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/dadosjusbr/executor/status"
 )
 
 func main() {
 	url := os.Getenv("URL")
 	if url == "" {
-		log.Fatal("URL env var can not be empty")
+		status.ExitFromError(status.NewError(status.InvalidParameters, fmt.Errorf("URL env var can not be empty")))
 	}
 	output := os.Getenv("OUTPUT_FOLDER")
 	if output == "" {
-		log.Fatal("OUTPUT_FOLDER env var can not be empty")
+		status.ExitFromError(status.NewError(status.InvalidParameters, fmt.Errorf("OUTPUT_FOLDER env var can not be empty")))
 	}
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(status.DataUnavailable)
+		status.ExitFromError(status.NewError(status.DataUnavailable, fmt.Errorf("error requesting url: %s", err)))
 	}
 	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		status.ExitFromError(status.NewError(status.DataUnavailable, fmt.Errorf("error reading data: %s", err)))
 	}
 
 	pathFile := fmt.Sprintf("%s/result.json", output)
 	err = ioutil.WriteFile(pathFile, data, 0666)
 	if err != nil {
-		log.Fatal(err)
+		status.ExitFromError(status.NewError(status.SystemError, fmt.Errorf("error writing file: %s", err)))
 	}
 
 	fmt.Println(string(data))
