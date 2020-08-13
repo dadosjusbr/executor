@@ -35,6 +35,7 @@ type Pipeline struct {
 	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
 	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
 	Stages          []Stage           // Confguration for the pipeline's stages.
+	ErrorHandler    Stage             // Default stage to deal with any errors that occur in the execution of the pipeline.
 }
 
 // CmdResult represents information about a execution of a command.
@@ -85,7 +86,7 @@ func setup(baseDir string) error {
 	return nil
 }
 
-func clearSetup() error {
+func tearDown() error {
 	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	if err := cmd.Run(); err != nil {
@@ -95,7 +96,19 @@ func clearSetup() error {
 	return nil
 }
 
-// Run executes the pipeline.
+// Run executes the pipeline. For each stage defined in the pipeline we execute
+// the `docker build` and `docker run`. If any of these two processes fail,
+// we interrupt the flow and the error handler is called. Here, we consider a
+// failure when the building or execution of the image returns a status other
+// than 0 or when an error is raised within the buildImage or runImage functions.
+//
+// The error handler can be defined as a stage, but it will only be executed
+// in case of an error in the standard pipeline flow. If there are any errors
+// in the execution of the error handler, the process is stopped and the error is returned.
+//
+// If a specific error handler has not been defined, the default behavior is to
+// return the error message that occurred in the standard flow along with the
+// structure that describes all the pipeline execution information.
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
@@ -122,18 +135,13 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
-			ser.FinalTime = time.Now()
-			result.StagesResults = append(result.StagesResults, ser)
-			result.Status = status.BuildError
-			result.FinalTime = time.Now()
-			return result, fmt.Errorf("error when building image: %s", err)
+			m := fmt.Sprintf("error when building image: %s", err)
+			return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
 		}
 		if status.Code(ser.BuildResult.ExitStatus) != status.OK {
-			ser.FinalTime = time.Now()
-			result.StagesResults = append(result.StagesResults, ser)
-			result.Status = status.BuildError
-			result.FinalTime = time.Now()
-			return result, fmt.Errorf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
+			m := fmt.Sprintf("error when building image: status code %d(%s) when building image for %s", ser.BuildResult.ExitStatus, status.Text(status.Code(ser.BuildResult.ExitStatus)), id)
+			return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
+
 		}
 		log.Println("Image built sucessfully!")
 
@@ -146,18 +154,12 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
 		ser.RunResult, err = runImage(id, dir, stdout, stage.RunEnv)
 		if err != nil {
-			ser.FinalTime = time.Now()
-			result.StagesResults = append(result.StagesResults, ser)
-			result.Status = status.BuildError
-			result.FinalTime = time.Now()
-			return result, fmt.Errorf("error when running image: %s", err)
+			m := fmt.Sprintf("error when running image: %s", err)
+			return handleError(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
 		if status.Code(ser.RunResult.ExitStatus) != status.OK {
-			ser.FinalTime = time.Now()
-			result.StagesResults = append(result.StagesResults, ser)
-			result.Status = status.BuildError
-			result.FinalTime = time.Now()
-			return result, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
+			m := fmt.Sprintf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
+			return handleError(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
 		log.Printf("Image executed successfully!\n\n")
 
@@ -165,9 +167,9 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		result.StagesResults = append(result.StagesResults, ser)
 	}
 
-	if err := clearSetup(); err != nil {
+	if err := tearDown(); err != nil {
 		result.Status = status.SetupError
-		return result, fmt.Errorf("error in inicial setup. %q", err)
+    return result, fmt.Errorf("error in tearDown: %q", err)
 	}
 
 	result.Status = status.OK
@@ -176,14 +178,53 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	return result, nil
 }
 
-func storeError(msg string, err error) error {
-	return fmt.Errorf("%s: %s", msg, err)
-	// TODO: Store error
-	//er.Cr.AgencyID = filepath.Base(job)
-	//Store Error
-	//Build(storeErrDir, commit, conf)
-	//execStoreErr(er, conf)
-	//continue
+func handleError(result *PipelineResult, ser StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
+	ser.FinalTime = time.Now()
+	result.StagesResults = append(result.StagesResults, ser)
+
+	if handler.Dir != "" {
+		var serError StageExecutionResult
+		var err error
+		serError.Stage = handler.Name
+		serError.StartTime = time.Now()
+
+		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, ser.Stage)
+		serError.BuildResult, err = buildImage(id, handler.Dir, handler.BuildEnv)
+		if err != nil {
+			result.StagesResults = append(result.StagesResults, serError)
+			result.Status = status.ErrorHandlerError
+			result.FinalTime = time.Now()
+
+			return *result, fmt.Errorf("error when building image for error handler: %s", err)
+		}
+		if status.Code(serError.BuildResult.ExitStatus) != status.OK {
+			result.StagesResults = append(result.StagesResults, serError)
+			result.Status = status.ErrorHandlerError
+			result.FinalTime = time.Now()
+
+			return *result, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id)
+		}
+
+		serError.RunResult, err = runImage(id, handler.Dir, string(previousStatus), handler.RunEnv)
+		if err != nil {
+			result.StagesResults = append(result.StagesResults, serError)
+			result.Status = status.ErrorHandlerError
+			result.FinalTime = time.Now()
+
+			return *result, fmt.Errorf("error when running image for error handler: %s", err)
+		}
+		if status.Code(serError.RunResult.ExitStatus) != status.OK {
+			result.StagesResults = append(result.StagesResults, serError)
+			result.Status = status.ErrorHandlerError
+			result.FinalTime = time.Now()
+
+			return *result, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", serError.RunResult.ExitStatus, status.Text(status.Code(serError.RunResult.ExitStatus)), id)
+		}
+	}
+
+	result.Status = previousStatus
+	result.FinalTime = time.Now()
+	return *result, fmt.Errorf(msg)
 }
 
 func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
