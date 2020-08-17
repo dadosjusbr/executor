@@ -96,19 +96,31 @@ func tearDown() error {
 	return nil
 }
 
-// Run executes the pipeline. For each stage defined in the pipeline we execute
-// the `docker build` and `docker run`. If any of these two processes fail,
-// we interrupt the flow and the error handler is called. Here, we consider a
-// failure when the building or execution of the image returns a status other
-// than 0 or when an error is raised within the buildImage or runImage functions.
+// Run executes the pipeline.
+// For each stage defined in the pipeline we execute the `docker build` and
+// `docker run`. If any of these two processes fail, we interrupt the flow
+// and the error handler is called. Here, we consider a failure when the
+// building or execution of the image returns a status other than 0 or
+// when an error is raised within the buildImage or runImage functions.
 //
-// The error handler can be defined as a stage, but it will only be executed
-// in case of an error in the standard pipeline flow. If there are any errors
-// in the execution of the error handler, the process is stopped and the error is returned.
+// The error handler can be defined as a stage, but it will only be executed in
+// case of an error in the pipeline standard flow, which is when we call the
+// function handleError.
+//
+// When handleError is called we pass all informations about the pipeline
+// execution until that point, which are:
+// - the PipelineResult (until current stage),
+// - the StageResult (from current stage),
+// - error status and error message
+// - the stage ErrorHandler (defined in the Pipeline).
+// Thereby the error handler will able to process or store the problem
+// that occurred in the current stage. If there are any errors in the
+// execution of the error handler, the processing is completely stopped
+// and the error is returned.
 //
 // If a specific error handler has not been defined, the default behavior is to
 // return the error message that occurred in the standard flow along with the
-// structure that describes all the pipeline execution information.
+// structure that describes all the pipeline execution information until that point.
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
@@ -169,7 +181,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 	if err := tearDown(); err != nil {
 		result.Status = status.SetupError
-    return result, fmt.Errorf("error in tearDown: %q", err)
+		return result, fmt.Errorf("error in final setup. %q", err)
 	}
 
 	result.Status = status.OK
@@ -178,6 +190,12 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	return result, nil
 }
 
+// handleError is responsible for build and run the stage ErrorHandler
+// defined in the Pipeline. It is called when occurs any error in
+// pipeline standard flow.
+//
+// If a specific error handler has not been defined, the default behavior is to
+// return the PipelineResult until the last stage executed and the error occurred.
 func handleError(result *PipelineResult, ser StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
 	ser.FinalTime = time.Now()
 	result.StagesResults = append(result.StagesResults, ser)
@@ -239,6 +257,8 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 	return env
 }
 
+// buildImage executes the 'docker build' for a image, considering the
+// parameters defined for it and returns a CmdResult and an error, if any.
 func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 	log.Printf("Building image for %s", id)
 
@@ -292,7 +312,9 @@ func statusCode(err error) int {
 	return noExitError
 }
 
-// runImage executes the image designed and returns it's stdin, stdout and exit error if any.
+// runImage executes the 'docker run' for a image, considering the
+// parameters defined for it and returns a CmdResult and an error, if any.
+// It uses the stdout from the previous stage as the stdin for this new command.
 func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
 
