@@ -160,7 +160,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stdout := ""
 		if index != 0 {
 			// 'index-1' is accessing the output from previous stage.
-			stdout = result.StagesResults[index-1].RunResult.Stdout
+			stdout = result.StageResults[index-1].RunResult.Stdout
 		}
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
@@ -176,7 +176,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		log.Printf("Image executed successfully!\n\n")
 
 		ser.FinalTime = time.Now()
-		result.StagesResults = append(result.StagesResults, ser)
+		result.StageResults = append(result.StageResults, ser)
 	}
 
 	if err := tearDown(); err != nil {
@@ -198,7 +198,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 // return the PipelineResult until the last stage executed and the error occurred.
 func handleError(result *PipelineResult, previousSer StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
 	previousSer.FinalTime = time.Now()
-	result.StagesResults = append(result.StagesResults, previousSer)
+	result.StageResults = append(result.StageResults, previousSer)
 
 	if handler.Dir != "" {
 		var serError StageExecutionResult
@@ -209,14 +209,14 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, previousSer.Stage)
 		serError.BuildResult, err = buildImage(id, handler.Dir, handler.BuildEnv)
 		if err != nil {
-			result.StagesResults = append(result.StagesResults, serError)
+			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
 			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: %s", err))
 		}
 		if status.Code(serError.BuildResult.ExitStatus) != status.OK {
-			result.StagesResults = append(result.StagesResults, serError)
+			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
@@ -225,14 +225,14 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 
 		serError.RunResult, err = runImage(id, handler.Dir, status.Text(previousStatus), handler.RunEnv)
 		if err != nil {
-			result.StagesResults = append(result.StagesResults, serError)
+			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
 			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: %s", err))
 		}
 		if status.Code(serError.RunResult.ExitStatus) != status.OK {
-			result.StagesResults = append(result.StagesResults, serError)
+			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
