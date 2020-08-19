@@ -25,6 +25,9 @@ func main() {
 		log.Fatal(status.DataUnavailable)
 		status.ExitFromError(status.NewError(status.DataUnavailable, fmt.Errorf("error requesting url: %s", err)))
 	}
+	if resp.StatusCode != 200 {
+		log.Fatalf("http status is not 200 OK. request returned the %d status", resp.StatusCode)
+	}
 	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
