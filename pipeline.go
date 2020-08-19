@@ -60,11 +60,11 @@ type StageExecutionResult struct {
 
 // PipelineResult represents the pipeline information and their results.
 type PipelineResult struct {
-	Name          string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
-	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
-	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
-	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
-	Status        string                 `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError...).
+	Name         string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
+	StageResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
+	StartTime    time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
+	FinalTime    time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
+	Status       string                 `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError...).
 }
 
 func setup(baseDir string) error {
