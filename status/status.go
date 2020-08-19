@@ -54,6 +54,10 @@ var (
 		DataUnavailable:   "Data Unavailable",
 		InvalidFile:       "Invalid File",
 		Unknown:           "Unknown",
+		SetupError:        "Setup Error",
+		BuildError:        "Build Error",
+		RunError:          "Run Error",
+		ErrorHandlerError: "Error Handler Error",
 	}
 )
 

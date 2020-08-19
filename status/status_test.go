@@ -24,6 +24,10 @@ func TestText(t *testing.T) {
 		{"Testing status InvalidFile", 5, "Invalid File"},
 		{"Testing Unknown status", 6, "Unknown"},
 		{"Testing status Unexpected", -505, ""},
+		{"Testing status SetupError", 7, "Setup Error"},
+		{"Testing status BuildError", 8, "Build Error"},
+		{"Testing status RunError", 9, "Run Error"},
+		{"Testing status ErrorHandlerError", 10, "Error Handler Error"},
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
