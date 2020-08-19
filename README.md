@@ -1,6 +1,8 @@
 # executor
 
-Biblioteca go que permite a execução de um pipeline DadosjusBR.
+A partir da necessidade da configuração de um Pipeline no  [DadosJusBR](https://dadosjusbr.org/), criamos um pacote em Go chamado Executor. Ele será utilizado dentro da orquestradora Alba e sua principal função é ser capaz de definir, configurar e executar  um Pipeline.
+
+Consideramos um Pipeline como uma sequência de estágios que visam realizar uma tarefa macro, onde essa tarefa foi dividida em uma série de programas "dockerizados".
 
 ## O que é um Pipeline DadosjusBR?
 
