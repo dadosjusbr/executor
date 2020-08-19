@@ -114,7 +114,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 	if err := setup(p.DefaultBaseDir); err != nil {
 		result.Status = status.Text(status.SetupError)
-		return result, status.NewError(status.SetupError, fmt.Errorf("error in inicial setup"))
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in inicial setup: %q", err))
 	}
 
 	for index, stage := range p.Stages {
@@ -169,7 +169,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 	if err := tearDown(); err != nil {
 		result.Status = status.Text(status.SetupError)
-		return result, status.NewError(status.SetupError, fmt.Errorf("error in tear down"))
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in tear down: %q", err))
 	}
 
 	result.Status = status.Text(status.OK)
