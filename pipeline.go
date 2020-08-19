@@ -64,7 +64,7 @@ type PipelineResult struct {
 	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
 	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
 	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
-	Status        status.Code            `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError).
+	Status        string                 `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError...).
 }
 
 func setup(baseDir string) error {
@@ -113,8 +113,8 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
 	if err := setup(p.DefaultBaseDir); err != nil {
-		result.Status = status.SetupError
-		return result, fmt.Errorf("error in inicial setup. %q", err)
+		result.Status = status.Text(status.SetupError)
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in inicial setup"))
 	}
 
 	for index, stage := range p.Stages {
@@ -168,11 +168,11 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	}
 
 	if err := tearDown(); err != nil {
-		result.Status = status.SetupError
-		return result, fmt.Errorf("error in inicial setup. %q", err)
+		result.Status = status.Text(status.SetupError)
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in tear down"))
 	}
 
-	result.Status = status.OK
+	result.Status = status.Text(status.OK)
 	result.FinalTime = time.Now()
 
 	return result, nil
@@ -192,37 +192,37 @@ func handleError(result *PipelineResult, ser StageExecutionResult, previousStatu
 		serError.BuildResult, err = buildImage(id, handler.Dir, handler.BuildEnv)
 		if err != nil {
 			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when building image for error handler: %s", err)
+			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: %s", err))
 		}
 		if status.Code(serError.BuildResult.ExitStatus) != status.OK {
 			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id)
+			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id))
 		}
 
 		serError.RunResult, err = runImage(id, handler.Dir, string(previousStatus), handler.RunEnv)
 		if err != nil {
 			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image for error handler: %s", err)
+			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: %s", err)
 		}
 		if status.Code(serError.RunResult.ExitStatus) != status.OK {
 			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", serError.RunResult.ExitStatus, status.Text(status.Code(serError.RunResult.ExitStatus)), id)
+			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", serError.RunResult.ExitStatus, status.Text(status.Code(serError.RunResult.ExitStatus)), id))
 		}
 	}
 
-	result.Status = previousStatus
+	result.Status = status.Text(previousStatus)
 	result.FinalTime = time.Now()
 	return *result, fmt.Errorf(msg)
 }
