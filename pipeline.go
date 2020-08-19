@@ -211,7 +211,7 @@ func handleError(result *PipelineResult, ser StageExecutionResult, previousStatu
 			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: %s", err)
+			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: %s", err))
 		}
 		if status.Code(serError.RunResult.ExitStatus) != status.OK {
 			result.StagesResults = append(result.StagesResults, serError)
