@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -107,16 +108,17 @@ func tearDown() error {
 // case of an error in the pipeline standard flow, which is when we call the
 // function handleError.
 //
-// When handleError is called we pass all informations about the pipeline
+// When handleError is called we pass all information about the pipeline
 // execution until that point, which are:
 // - the PipelineResult (until current stage),
 // - the StageResult (from current stage),
 // - error status and error message
 // - the stage ErrorHandler (defined in the Pipeline).
-// Thereby the error handler will able to process or store the problem
-// that occurred in the current stage. If there are any errors in the
-// execution of the error handler, the processing is completely stopped
-// and the error is returned.
+// Thereby the error handler will able to process or store the problem that
+// occurred in the current stage. The function runImage for stage ErrorHandler
+// receives the StageResult as STDIN.
+// If there are any errors in the execution of the error handler,
+// the processing is completely stopped and the error is returned.
 //
 // If a specific error handler has not been defined, the default behavior is to
 // return the error message that occurred in the standard flow along with the
@@ -192,10 +194,22 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 // handleError is responsible for build and run the stage ErrorHandler
 // defined in the Pipeline. It is called when occurs any error in
-// pipeline standard flow.
+// pipeline standard flow. If a specific error handler has not been
+// defined, the default behavior is to return the PipelineResult until
+// the last stage executed and the error occurred.
 //
-// If a specific error handler has not been defined, the default behavior is to
-// return the PipelineResult until the last stage executed and the error occurred.
+// When handleError is called it receives all information about the pipeline
+// execution until that point, which are:
+// - the PipelineResult (until current stage),
+// - the StageResult (from current stage),
+// - error status and error message
+// - the stage ErrorHandler (defined in the Pipeline).
+// Thereby the error handler will able to process or store the problem that
+// occurred in the current stage. The function runImage for stage ErrorHandler
+// receives the StageResult as STDIN.
+//
+// If there are any errors in the execution of the error handler,
+// the processing is completely stopped and the error is returned.
 func handleError(result *PipelineResult, previousSer StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
 	previousSer.FinalTime = time.Now()
 	result.StageResults = append(result.StageResults, previousSer)
@@ -223,7 +237,11 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id))
 		}
 
-		serError.RunResult, err = runImage(id, handler.Dir, previousSer.RunResult.Stdout, handler.RunEnv)
+		erStdin, err := json.Marshal(previousSer)
+		if err != nil {
+			return *result, status.NewError(status.ErrorHandlerError, fmt.Errorf("error in parser StageExecutionResult for error handler: %s", err))
+		}
+		serError.RunResult, err = runImage(id, handler.Dir, string(erStdin), handler.RunEnv)
 		if err != nil {
 			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
