@@ -13,7 +13,7 @@ COPY . .
 ENV GO111MODULE=on 
 
 # Install package status
-RUN apk update && apk add git && go get "github.com/dadosjusbr/executor"
+RUN apk update && apk add git
 
 # Build the application
 RUN go build -o main
