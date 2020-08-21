@@ -223,7 +223,7 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id))
 		}
 
-		serError.RunResult, err = runImage(id, handler.Dir, status.Text(previousStatus), handler.RunEnv)
+		serError.RunResult, err = runImage(id, handler.Dir, previousSer.RunResult.Stdout, handler.RunEnv)
 		if err != nil {
 			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
