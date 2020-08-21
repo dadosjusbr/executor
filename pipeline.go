@@ -108,7 +108,7 @@ func tearDown() error {
 // case of an error in the pipeline standard flow, which is when we call the
 // function handleError.
 //
-// When handleError is called we pass all information about the pipeline
+// When handleError is called we pass all informations about the pipeline
 // execution until that point, which are:
 // - the PipelineResult (until current stage),
 // - the StageResult (from current stage),
@@ -198,7 +198,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 // defined, the default behavior is to return the PipelineResult until
 // the last stage executed and the error occurred.
 //
-// When handleError is called it receives all information about the pipeline
+// When handleError is called it receives all informations about the pipeline
 // execution until that point, which are:
 // - the PipelineResult (until current stage),
 // - the StageResult (from current stage),
