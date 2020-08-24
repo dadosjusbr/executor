@@ -12,6 +12,9 @@ import (
 
 func main() {
 	goPath := os.Getenv("GOPATH")
+	if goPath == "" {
+		log.Fatal("GOPATH env var can not be empty")
+	}
 	baseDir := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
 
 	stageGoRunEnv := map[string]string{
