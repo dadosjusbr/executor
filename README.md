@@ -56,6 +56,6 @@ Aqui, consideramos erro quando a construção ou execução de uma imagem [levan
 
 ## Como usar o pacote *executor*?
 
-O tutorial de utilização pode ser encontrado [nesse link](). E o código completo do tutorial [aqui]().
+O tutorial de utilização pode ser encontrado [nesse link](https://medium.com/dadosjusbr/dadosjusbr-executando-um-pipeline-cfd26a50165e). E o código completo do tutorial [aqui](https://github.com/dadosjusbr/executor/tree/master/tutorial).
 
 Para mais detalhes, dúvidas ou sugestões você pode entrar em contato conosco pelo email dadosjusbr@gmail.com.
