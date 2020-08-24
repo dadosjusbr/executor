@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -60,11 +61,11 @@ type StageExecutionResult struct {
 
 // PipelineResult represents the pipeline information and their results.
 type PipelineResult struct {
-	Name          string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
-	StagesResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
-	StartTime     time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
-	FinalTime     time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
-	Status        status.Code            `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError).
+	Name         string                 `json:"name" bson:"name,omitempty"`               // Name of pipeline.
+	StageResults []StageExecutionResult `json:"stageResult" bson:"stageResult,omitempty"` // Results of stage execution.
+	StartTime    time.Time              `json:"start" bson:"start,omitempty"`             // Time at start of pipeline.
+	FinalTime    time.Time              `json:"final" bson:"final,omitempty"`             // Time at end of pipeline.
+	Status       string                 `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError...).
 }
 
 func setup(baseDir string) error {
@@ -113,10 +114,11 @@ func tearDown() error {
 // - the StageResult (from current stage),
 // - error status and error message
 // - the stage ErrorHandler (defined in the Pipeline).
-// Thereby the error handler will able to process or store the problem
-// that occurred in the current stage. If there are any errors in the
-// execution of the error handler, the processing is completely stopped
-// and the error is returned.
+// Thereby the error handler will able to process or store the problem that
+// occurred in the current stage. The function runImage for stage ErrorHandler
+// receives the StageResult as STDIN.
+// If there are any errors in the execution of the error handler,
+// the processing is completely stopped and the error is returned.
 //
 // If a specific error handler has not been defined, the default behavior is to
 // return the error message that occurred in the standard flow along with the
@@ -125,8 +127,8 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
 	if err := setup(p.DefaultBaseDir); err != nil {
-		result.Status = status.SetupError
-		return result, fmt.Errorf("error in inicial setup. %q", err)
+		result.Status = status.Text(status.SetupError)
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in inicial setup: %q", err))
 	}
 
 	for index, stage := range p.Stages {
@@ -160,7 +162,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		stdout := ""
 		if index != 0 {
 			// 'index-1' is accessing the output from previous stage.
-			stdout = result.StagesResults[index-1].RunResult.Stdout
+			stdout = result.StageResults[index-1].RunResult.Stdout
 		}
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
@@ -176,15 +178,15 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		log.Printf("Image executed successfully!\n\n")
 
 		ser.FinalTime = time.Now()
-		result.StagesResults = append(result.StagesResults, ser)
+		result.StageResults = append(result.StageResults, ser)
 	}
 
 	if err := tearDown(); err != nil {
-		result.Status = status.SetupError
-		return result, fmt.Errorf("error in final setup. %q", err)
+		result.Status = status.Text(status.SetupError)
+		return result, status.NewError(status.SetupError, fmt.Errorf("error in tear down: %q", err))
 	}
 
-	result.Status = status.OK
+	result.Status = status.Text(status.OK)
 	result.FinalTime = time.Now()
 
 	return result, nil
@@ -192,13 +194,25 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 // handleError is responsible for build and run the stage ErrorHandler
 // defined in the Pipeline. It is called when occurs any error in
-// pipeline standard flow.
+// pipeline standard flow. If a specific error handler has not been
+// defined, the default behavior is to return the PipelineResult until
+// the last stage executed and the error occurred.
 //
-// If a specific error handler has not been defined, the default behavior is to
-// return the PipelineResult until the last stage executed and the error occurred.
-func handleError(result *PipelineResult, ser StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
-	ser.FinalTime = time.Now()
-	result.StagesResults = append(result.StagesResults, ser)
+// When handleError is called it receives all informations about the pipeline
+// execution until that point, which are:
+// - the PipelineResult (until current stage),
+// - the StageResult (from current stage),
+// - error status and error message
+// - the stage ErrorHandler (defined in the Pipeline).
+// Thereby the error handler will able to process or store the problem that
+// occurred in the current stage. The function runImage for stage ErrorHandler
+// receives the StageResult as STDIN.
+//
+// If there are any errors in the execution of the error handler,
+// the processing is completely stopped and the error is returned.
+func handleError(result *PipelineResult, previousSer StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
+	previousSer.FinalTime = time.Now()
+	result.StageResults = append(result.StageResults, previousSer)
 
 	if handler.Dir != "" {
 		var serError StageExecutionResult
@@ -206,41 +220,45 @@ func handleError(result *PipelineResult, ser StageExecutionResult, previousStatu
 		serError.Stage = handler.Name
 		serError.StartTime = time.Now()
 
-		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, ser.Stage)
+		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, previousSer.Stage)
 		serError.BuildResult, err = buildImage(id, handler.Dir, handler.BuildEnv)
 		if err != nil {
-			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.StageResults = append(result.StageResults, serError)
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when building image for error handler: %s", err)
+			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: %s", err))
 		}
 		if status.Code(serError.BuildResult.ExitStatus) != status.OK {
-			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.StageResults = append(result.StageResults, serError)
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id)
+			return *result, status.NewError(status.BuildError, fmt.Errorf("error when building image for error handler: Status code %d(%s) when running image for %s", serError.BuildResult.ExitStatus, status.Text(status.Code(serError.BuildResult.ExitStatus)), id))
 		}
 
-		serError.RunResult, err = runImage(id, handler.Dir, string(previousStatus), handler.RunEnv)
+		erStdin, err := json.Marshal(previousSer)
 		if err != nil {
-			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			return *result, status.NewError(status.ErrorHandlerError, fmt.Errorf("error in parser StageExecutionResult for error handler: %s", err))
+		}
+		serError.RunResult, err = runImage(id, handler.Dir, string(erStdin), handler.RunEnv)
+		if err != nil {
+			result.StageResults = append(result.StageResults, serError)
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image for error handler: %s", err)
+			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: %s", err))
 		}
 		if status.Code(serError.RunResult.ExitStatus) != status.OK {
-			result.StagesResults = append(result.StagesResults, serError)
-			result.Status = status.ErrorHandlerError
+			result.StageResults = append(result.StageResults, serError)
+			result.Status = status.Text(status.ErrorHandlerError)
 			result.FinalTime = time.Now()
 
-			return *result, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", serError.RunResult.ExitStatus, status.Text(status.Code(serError.RunResult.ExitStatus)), id)
+			return *result, status.NewError(status.RunError, fmt.Errorf("error when running image for error handler: Status code %d(%s) when running image for %s", serError.RunResult.ExitStatus, status.Text(status.Code(serError.RunResult.ExitStatus)), id))
 		}
 	}
 
-	result.Status = previousStatus
+	result.Status = status.Text(previousStatus)
 	result.FinalTime = time.Now()
 	return *result, fmt.Errorf(msg)
 }
