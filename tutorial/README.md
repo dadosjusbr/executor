@@ -31,7 +31,7 @@ RUN go build -o main
 
 ENTRYPOINT ["./main"]
 ```
-Repare na criação da pasta `/output` dentro do container.
+Repare na criação da pasta `/output` dentro do container. É essa pasta que será espelhada com a nossa pasta `tutorial/output`local.
 
 *main.go*
 ```
@@ -99,7 +99,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 CMD ["python", "./script.py"]
 ```
-Repare na criação da pasta `/output` dentro do container.
+Repare na criação da pasta `/output` dentro do container. É essa pasta que será espelhada com a nossa pasta `tutorial/output`local.
 
 *script.py*
 ```
