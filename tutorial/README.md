@@ -12,7 +12,7 @@ Vamos montar um pipeline com 2 estágios e 2 programas escritos em linguagens di
 ## Primeiro estágio: [stage-go](https://github.com/dadosjusbr/executor/tree/master/tutorial/stage-go)
 O primeiro programa é escrito em Go. Ele faz uma requisição na API do DadosJusBR, salva o arquivo em formato json e imprime o resultado na saída padrão.
 
-[*Dockerfile*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-go/Dockerfile)
+### [*Dockerfile*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-go/Dockerfile)
 ``` dockerfile
 FROM golang:1.14.0-alpine
 
@@ -38,7 +38,7 @@ ENTRYPOINT ["./main"]
 ```
 Repare na criação da pasta `/output` dentro do container. É essa pasta que será espelhada com a nossa pasta `tutorial/output`local.
 
-[*main.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-go/main.go)
+### [*main.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-go/main.go)
 ``` go
 package main
 
@@ -85,7 +85,7 @@ Um ponto a ser destacado aqui é a utilização do pacote [status](https://githu
 ## Segundo estágio: [stage-python](https://github.com/dadosjusbr/executor/tree/master/tutorial/stage-python)
 O segundo programa consome dados da entrada padrão e, usando a biblioteca Pandas na linguagem Python, transforma os dados aninhados (no formato json), para um formato tabular. Por fim, salva os dados em um arquivo .csv.
 
-[*Dockerfile*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-python/Dockerfile)
+### [*Dockerfile*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-python/Dockerfile)
 ``` dockerfile
 FROM python:3.7.2-slim
 
@@ -106,7 +106,7 @@ CMD ["python", "./script.py"]
 ```
 Repare na criação da pasta `/output` dentro do container. É essa pasta que será espelhada com a nossa pasta `tutorial/output`local.
 
-[*script.py*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-python/script.py)
+### [*script.py*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-python/script.py)
 ``` python
 import sys
 import pandas as pd
@@ -126,7 +126,7 @@ df.to_csv(file_name, index=False)
 
 ## Montagem do Pipeline
 
-[*tutorial.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/tutorial.go)
+### [*tutorial.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/tutorial.go)
 ``` go
 func main() {
 	goPath := os.Getenv("GOPATH")
@@ -170,6 +170,8 @@ func main() {
 
 }
 ```
+
+### Resultado do Pipeline
 
 Após a execução, nossa pasta tutorial fica da seguinte forma:
 ```
