@@ -24,10 +24,10 @@ Uma vez que sua aplicação seja dockerizada, você pode utilizar o executor par
 
 ### Variáveis de ambiente
 
-É possível configurar variáveis de ambiente tanto para o `docker build` quanto para o `docker run` do seu estágio. E, caso elas se repitam para todos os estágios, você também pode defini-las como variáveis padrão. Para que essas customizações pudessem ser realizadas, adicionamos na sintaxe do Pipeline estruturas especiais que devem ser configuradas a partir da sua necessidade: [BuildEnv, RunEnv](https://github.com/dadosjusbr/executor/blob/45cacc0878707a7cbc9ed0d38299959e67c72f68/pipeline.go#L28), [DefaultBuildEnv e DefaultRunEnv](https://medium.com/r/?url=https%3A%2F%2Fgithub.com%2Fdadosjusbr%2Fexecutor%2Fblob%2F45cacc0878707a7cbc9ed0d38299959e67c72f68%2Fpipeline.go%23L36).
+É possível configurar variáveis de ambiente tanto para o `docker build` quanto para o `docker run` do seu estágio. E, caso elas se repitam para todos os estágios, você também pode defini-las como variáveis padrão. Para que essas customizações pudessem ser realizadas, adicionamos na sintaxe do Pipeline estruturas especiais que devem ser configuradas a partir da sua necessidade: [BuildEnv, RunEnv](https://github.com/dadosjusbr/executor/blob/45cacc0878707a7cbc9ed0d38299959e67c72f68/pipeline.go#L28), [DefaultBuildEnv e DefaultRunEnv](https://github.com/dadosjusbr/executor/blob/45cacc0878707a7cbc9ed0d38299959e67c72f68/pipeline.go#L36).
 
 *Exemplo*
-```
+``` go
 buildEnv := map[string]string{
     "COMMIT":           "1a2b3c4d5e",
 }
@@ -59,3 +59,5 @@ Aqui, consideramos erro quando a construção ou execução de uma imagem [levan
 O tutorial de utilização pode ser encontrado [nesse link](https://medium.com/dadosjusbr/dadosjusbr-executando-um-pipeline-cfd26a50165e). E o código completo do tutorial [aqui](https://github.com/dadosjusbr/executor/tree/master/tutorial).
 
 Para mais detalhes, dúvidas ou sugestões você pode entrar em contato conosco pelo email dadosjusbr@gmail.com.
+
+***Esse pacote foi desenvolvido a partir de todo o trabalho e experiência dos integrantes do time [DadosJusBR](https://dadosjusbr.org/equipe)***.
