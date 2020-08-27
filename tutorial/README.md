@@ -1,4 +1,4 @@
-# Tutorial de utilização do pacote *executor*
+# Tutorial
 
 *[O tutorial também pode ser visualizado no medium]().
 
