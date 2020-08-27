@@ -4,9 +4,15 @@
 
 Vamos montar um pipeline com 2 estágios e 2 programas escritos em linguagens diferentes.
 
-- [Definindo o primeiro estágio]()
-- [Definindo o segundo estágio]()
-- [Definindo o Pipeline]()
+- [Definindo o primeiro estágio](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#primeiro-est%C3%A1gio-stage-go)
+	- [Dockerfile](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#dockerfile)
+	- [main.go](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#maingo)
+- [Definindo o segundo estágio](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#segundo-est%C3%A1gio-stage-python)
+	- [Dockerfile](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#dockerfile-1)
+	- [script.py](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#scriptpy)
+- [Definindo o Pipeline](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#montagem-do-pipeline)
+	- [tutorial.go](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#tutorialgo)
+- [Resultado do Pipeline](https://github.com/dadosjusbr/executor/blob/master/tutorial/README.md#resultado-do-pipeline)
 
 
 ## Primeiro estágio: [stage-go](https://github.com/dadosjusbr/executor/tree/master/tutorial/stage-go)
