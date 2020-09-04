@@ -22,21 +22,21 @@ const (
 
 // Stage is a phase of data release process.
 type Stage struct {
-	Name     string            // Stage's name.
-	Dir      string            // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
-	BaseDir  string            // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
-	BuildEnv map[string]string // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
-	RunEnv   map[string]string // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	Name     string            `json:"name" bson:"name,omitempt"`           // Stage's name.
+	Dir      string            `json:"dir" bson:"dir,omitempt"`             // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	BaseDir  string            `json:"base-dir" bson:"base-dir,omitempt"`   // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
+	BuildEnv map[string]string `json:"build-env" bson:"build-env,omitempt"` // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	RunEnv   map[string]string `json:"run-env" bson:"run-env,omitempt"`     // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 }
 
 // Pipeline represents the sequence of stages for data release.
 type Pipeline struct {
-	Name            string            // Pipeline's name.
-	DefaultBaseDir  string            // Default base directory to be used in all stages.
-	DefaultBuildEnv map[string]string // Default variables to be used in the build of all stages.
-	DefaultRunEnv   map[string]string // Default variables to be used in the run of all stages.
-	Stages          []Stage           // Confguration for the pipeline's stages.
-	ErrorHandler    Stage             // Default stage to deal with any errors that occur in the execution of the pipeline.
+	Name            string            `json:"name" bson:"name,omitempt"`                           // Pipeline's name.
+	DefaultBaseDir  string            `json:"default-base-dir" bson:"default-base-dir,omitempt"`   // Default base directory to be used in all stages.
+	DefaultBuildEnv map[string]string `json:"default-build-env" bson:"default-build-env,omitempt"` // Default variables to be used in the build of all stages.
+	DefaultRunEnv   map[string]string `json:"default-run-env" bson:"default-run-env,omitempt"`     // Default variables to be used in the run of all stages.
+	Stages          []Stage           `json:"stages" bson:"stages,omitempt"`                       // Confguration for the pipeline's stages.
+	ErrorHandler    Stage             `json:"error-handler" bson:"error-handler,omitempt"`         // Default stage to deal with any errors that occur in the execution of the pipeline.
 }
 
 // CmdResult represents information about a execution of a command.
