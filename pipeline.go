@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -68,23 +69,56 @@ type PipelineResult struct {
 	Status       string                 `json:"status" bson:"status,omitempty"`           // Pipeline execution status(OK, RunError, BuildError, SetupError...).
 }
 
-func setup(baseDir string) error {
+func setup(baseDir string) (CmdResult, error) {
 	finalPath := fmt.Sprintf("%s/%s", baseDir, output)
+	log.Printf("$ rm -rf %s", finalPath)
 	if err := os.RemoveAll(finalPath); err != nil {
-		return fmt.Errorf("error removing existing output folder: %q", err)
+		return CmdResult{
+			Stdout:     "",
+			Stderr:     err.Error(),
+			Cmd:        fmt.Sprintf("rm -rf %s", finalPath),
+			CmdDir:     baseDir,
+			ExitStatus: 1,
+			Env:        os.Environ(),
+		}, nil
 	}
-
+	log.Printf("$ mkdir -m %d %s", dirPermission, finalPath)
 	if err := os.Mkdir(finalPath, dirPermission); err != nil {
-		return fmt.Errorf("error creating output folder: %q", err)
+		return CmdResult{
+			Stdout:     "",
+			Stderr:     err.Error(),
+			Cmd:        fmt.Sprintf("mkdir -m %d %s", dirPermission, finalPath),
+			CmdDir:     baseDir,
+			ExitStatus: 1,
+			Env:        os.Environ(),
+		}, nil
 	}
 
 	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", finalPath), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error creating volume dadosjusbr: %q", err)
-	}
+	cmd.Dir = baseDir
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
 
-	return nil
+	log.Printf("$ %s", strings.Join(cmdList, " "))
+	err := cmd.Run()
+	switch err.(type) {
+	case *exec.Error:
+		cmdResultError := CmdResult{
+			ExitStatus: statusCode(err),
+			Cmd:        strings.Join(cmdList, " "),
+		}
+		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
+	}
+	return CmdResult{
+		Stdout:     string(outb.Bytes()),
+		Stderr:     string(errb.Bytes()),
+		Cmd:        strings.Join(cmdList, " "),
+		CmdDir:     baseDir,
+		ExitStatus: statusCode(err),
+		Env:        os.Environ(),
+	}, nil
 }
 
 func tearDown() error {
@@ -126,9 +160,19 @@ func tearDown() error {
 func (p *Pipeline) Run() (PipelineResult, error) {
 	result := PipelineResult{Name: p.Name, StartTime: time.Now()}
 
-	if err := setup(p.DefaultBaseDir); err != nil {
+	log.Printf("Setting up Pipeline %s\n", p.Name)
+	setupRes, err := setup(p.DefaultBaseDir)
+	if err != nil {
 		result.Status = status.Text(status.SetupError)
 		return result, status.NewError(status.SetupError, fmt.Errorf("error in inicial setup: %q", err))
+	}
+	if status.Code(setupRes.ExitStatus) != status.OK {
+		// Treating setup as special stage result to enjoy the error treatment.
+		m := fmt.Sprintf("error setting up pipeline: status code %d(%s) when setting up pipeline", setupRes.ExitStatus, status.Text(status.Code(setupRes.ExitStatus)))
+		return handleError(&result, StageExecutionResult{
+			Stage:     "Pipeline_Setup",
+			RunResult: setupRes,
+		}, status.SetupError, m, p.ErrorHandler)
 	}
 
 	for index, stage := range p.Stages {
@@ -211,6 +255,14 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 // If there are any errors in the execution of the error handler,
 // the processing is completely stopped and the error is returned.
 func handleError(result *PipelineResult, previousSer StageExecutionResult, previousStatus status.Code, msg string, handler Stage) (PipelineResult, error) {
+	if reflect.ValueOf(handler).IsZero() {
+		erStdin, err := json.MarshalIndent(previousSer, "", "\t")
+		if err != nil {
+			return *result, status.NewError(status.ErrorHandlerError, fmt.Errorf("error marshaling input of error handler: %s", err))
+		}
+		fmt.Println(string(erStdin))
+		return *result, fmt.Errorf(msg)
+	}
 	previousSer.FinalTime = time.Now()
 	result.StageResults = append(result.StageResults, previousSer)
 
