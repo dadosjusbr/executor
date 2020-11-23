@@ -365,7 +365,7 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 		Env:        os.Environ(),
 	}
 
-	return cmdResult, nil
+	return cmdResult, err
 }
 
 // statusCode returns the exit code returned for the cmd execution.
@@ -423,5 +423,5 @@ func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResu
 		Env:        os.Environ(),
 	}
 
-	return cmdResult, nil
+	return cmdResult, err
 }
