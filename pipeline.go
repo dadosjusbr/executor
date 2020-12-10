@@ -334,24 +334,27 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 
 	var b strings.Builder
 	for k, v := range buildEnv {
-		fmt.Fprintf(&b, "--build-arg %s=%s ", k, v)
+		fmt.Fprintf(&b, "--build-arg %s=%s ", k, fmt.Sprintf(`"%s"`, v))
 	}
 	env := b.String()
 
-	cmdList := strings.Split(fmt.Sprintf("docker build %s-t %s .", env, filepath.Base(dir)), " ")
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	cmdStr := fmt.Sprintf("docker build %s-t %s .", env, filepath.Base(dir))
+	// sh -c is a workaround that allow us to have double quotes around environment variable values.
+	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
+	// TREPB.
+	cmd := exec.Command("bash", "-c", cmdStr)
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 
-	log.Printf("$ %s", strings.Join(cmdList, " "))
+	log.Printf("$ %s", cmdStr)
 	err := cmd.Run()
 	switch err.(type) {
 	case *exec.Error:
 		cmdResultError := CmdResult{
 			ExitStatus: statusCode(err),
-			Cmd:        strings.Join(cmdList, " "),
+			Cmd:        cmdStr,
 		}
 		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
@@ -359,7 +362,7 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 	cmdResult := CmdResult{
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
-		Cmd:        strings.Join(cmdList, " "),
+		Cmd:        cmdStr,
 		CmdDir:     dir,
 		ExitStatus: statusCode(err),
 		Env:        os.Environ(),
@@ -390,25 +393,28 @@ func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResu
 
 	var builder strings.Builder
 	for key, value := range runEnv {
-		fmt.Fprintf(&builder, "--env %s=%s ", key, value)
+		fmt.Fprintf(&builder, "--env %s=%s ", key, fmt.Sprintf(`"%s"`, value))
 	}
 	env := strings.TrimRight(builder.String(), " ")
 
-	cmdList := strings.Split(fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir)), " ")
-	cmd := exec.Command(cmdList[0], cmdList[1:]...)
+	cmdStr := fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir))
+	// sh -c is a workaround that allow us to have double quotes around environment variable values.
+	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
+	// TREPB.
+	cmd := exec.Command("bash", "-c", cmdStr)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(previousStdout)
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 
-	log.Printf("$ %s", strings.Join(cmdList, " "))
+	log.Printf("$ %s", cmdStr)
 	err := cmd.Run()
 	switch err.(type) {
 	case *exec.Error:
 		cmdResultError := CmdResult{
 			ExitStatus: statusCode(err),
-			Cmd:        strings.Join(cmdList, " "),
+			Cmd:        cmdStr,
 		}
 		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
@@ -417,7 +423,7 @@ func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResu
 		Stdin:      previousStdout,
 		Stdout:     string(outb.Bytes()),
 		Stderr:     string(errb.Bytes()),
-		Cmd:        strings.Join(cmdList, " "),
+		Cmd:        cmdStr,
 		CmdDir:     cmd.Dir,
 		ExitStatus: statusCode(err),
 		Env:        os.Environ(),

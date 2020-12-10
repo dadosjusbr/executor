@@ -4,6 +4,11 @@ A partir da necessidade da configuração de um Pipeline no [DadosJusBR](https:/
 
 Consideramos um Pipeline como uma sequência de [estágios](https://github.com/dadosjusbr/executor/blob/45cacc0878707a7cbc9ed0d38299959e67c72f68/pipeline.go#L24) que visam realizar uma tarefa macro, onde essa tarefa foi dividida em uma série de programas "dockerizados" que são executados de forma sequencial. De forma simplificada, a saída padrão de um estágio vira a entrada padrão do estágio seguinte.
 
+## Requisitos
+
+- docker
+- bash
+- git
 
 ## Entendendo um Pipeline DadosJusBR
 
