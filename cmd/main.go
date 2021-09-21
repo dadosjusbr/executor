@@ -16,8 +16,6 @@ func main() {
 		log.Fatalf("Erro lendo dados da entrada padrão: %q", err)
 	}
 
-	fmt.Printf("%+v\n\n", string(in))
-
 	var p executor.Pipeline
 	if err := json.Unmarshal(in, &p); err != nil {
 		log.Fatalf("Erro convertendo pipeline da entrada padrão: %q\n\"%s\"", err, string(in))
