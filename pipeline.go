@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/dadosjusbr/executor/status"
+	"github.com/go-git/go-git/v5"
 )
 
 const (
@@ -25,6 +28,7 @@ const (
 type Stage struct {
 	Name     string            `json:"name" bson:"name,omitempt"`           // Stage's name.
 	Dir      string            `json:"dir" bson:"dir,omitempt"`             // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	Repo     string            `json:"repo" bson:"repo,omitempt"`           // Repository URL from where to clone the pipeline stage.
 	BaseDir  string            `json:"base-dir" bson:"base-dir,omitempt"`   // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
 	BuildEnv map[string]string `json:"build-env" bson:"build-env,omitempt"` // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 	RunEnv   map[string]string `json:"run-env" bson:"run-env,omitempt"`     // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
@@ -53,7 +57,8 @@ type CmdResult struct {
 
 // StageExecutionResult represents information about the execution of a stage.
 type StageExecutionResult struct {
-	Stage       string    `json:"stage" bson:"stage,omitempty"`             // Name of stage.
+	Stage       Stage     `json:"stage" bson:"stage,omitempty"`             // Name of stage.
+	CommitID    string    `json:"commit" bson:"commit,omitempty"`           // Commit of the stage repo when executing the stage.
 	StartTime   time.Time `json:"start" bson:"start,omitempty"`             // Time at start of stage.
 	FinalTime   time.Time `json:"end" bson:"end,omitempty"`                 // Time at the end of stage.
 	BuildResult CmdResult `json:"buildResult" bson:"buildResult,omitempty"` // Build result.
@@ -112,8 +117,8 @@ func setup(baseDir string) (CmdResult, error) {
 		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
 	}
 	return CmdResult{
-		Stdout:     string(outb.Bytes()),
-		Stderr:     string(errb.Bytes()),
+		Stdout:     outb.String(),
+		Stderr:     errb.String(),
 		Cmd:        strings.Join(cmdList, " "),
 		CmdDir:     baseDir,
 		ExitStatus: statusCode(err),
@@ -170,7 +175,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		// Treating setup as special stage result to enjoy the error treatment.
 		m := fmt.Sprintf("error setting up pipeline: status code %d(%s) when setting up pipeline", setupRes.ExitStatus, status.Text(status.Code(setupRes.ExitStatus)))
 		return handleError(&result, StageExecutionResult{
-			Stage:     "Pipeline_Setup",
+			Stage:     Stage{Name: "Pipeline_Setup"},
 			RunResult: setupRes,
 		}, status.SetupError, m, p.ErrorHandler)
 	}
@@ -178,18 +183,44 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 	for index, stage := range p.Stages {
 		var ser StageExecutionResult
 		var err error
-		ser.Stage = stage.Name
+		ser.Stage = stage
 		ser.StartTime = time.Now()
-
-		if len(stage.BaseDir) == 0 {
+		if stage.BaseDir == "" {
 			stage.BaseDir = p.DefaultBaseDir
 		}
-		dir := fmt.Sprintf("%s/%s", stage.BaseDir, stage.Dir)
-
 		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
 		// 'index+1' because the index starts from 0.
 		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index+1, len(p.Stages))
 
+		// if there the field "repo" is set for the stage, clone it and update
+		// its baseDir and commit id.
+		if stage.Repo != "" {
+			u, err := url.Parse(stage.Repo)
+			if err != nil {
+				m := fmt.Sprintf("error parsing repository URL: %s", err)
+				return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
+			}
+			if u.Scheme == "" {
+				u.Scheme = "https"
+			}
+			log.Printf("Cloning repo %s\n", u.String())
+			// spaces are super bad for paths in command-line
+			tmpDir := filepath.Join(os.TempDir(), fmt.Sprintf("dadosjusbr-executor-%s", path.Base(u.Path)))
+			if err := os.MkdirAll(tmpDir, 0775); err != nil {
+				m := fmt.Sprintf("error when creating temporary dir: %s", err)
+				return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
+			}
+			cid, err := cloneRepository(tmpDir, u.String())
+			if err != nil {
+				m := fmt.Sprintf("error when cloning repo: %s", err)
+				return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
+			}
+			ser.CommitID = cid
+			stage.BaseDir = path.Join(tmpDir)
+			log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", ser.CommitID, stage.BaseDir)
+		}
+
+		dir := fmt.Sprintf("%s/%s", stage.BaseDir, stage.Dir)
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
 		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
 		if err != nil {
@@ -219,9 +250,21 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			m := fmt.Sprintf("error when running image: Status code %d(%s) when running image for %s", ser.RunResult.ExitStatus, status.Text(status.Code(ser.RunResult.ExitStatus)), id)
 			return handleError(&result, ser, status.RunError, m, p.ErrorHandler)
 		}
-		log.Printf("Image executed successfully!\n\n")
+		log.Printf("Image executed successfully!\n")
 
 		ser.FinalTime = time.Now()
+
+		// Removing temporary directories created from cloned repositories.
+		if stage.Repo != "" {
+			log.Printf("Removing cloned repo %s\n", stage.BaseDir)
+			if err := os.RemoveAll(stage.BaseDir); err != nil {
+				result.Status = status.Text(status.SystemError)
+				return result, status.NewError(status.SystemError, fmt.Errorf("error removing temp dir(%s): %q", stage.BaseDir, err))
+			}
+			log.Printf("Cloned repo temp dir removed successfully!\n\n")
+		} else {
+			fmt.Printf("\n")
+		}
 		result.StageResults = append(result.StageResults, ser)
 	}
 
@@ -269,7 +312,7 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 	if handler.Dir != "" {
 		var serError StageExecutionResult
 		var err error
-		serError.Stage = handler.Name
+		serError.Stage = handler
 		serError.StartTime = time.Now()
 
 		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, previousSer.Stage)
@@ -360,8 +403,8 @@ func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
 	}
 
 	cmdResult := CmdResult{
-		Stdout:     string(outb.Bytes()),
-		Stderr:     string(errb.Bytes()),
+		Stdout:     outb.String(),
+		Stderr:     errb.String(),
 		Cmd:        cmdStr,
 		CmdDir:     dir,
 		ExitStatus: statusCode(err),
@@ -421,8 +464,8 @@ func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResu
 
 	cmdResult := CmdResult{
 		Stdin:      previousStdout,
-		Stdout:     string(outb.Bytes()),
-		Stderr:     string(errb.Bytes()),
+		Stdout:     outb.String(),
+		Stderr:     errb.String(),
 		Cmd:        cmdStr,
 		CmdDir:     cmd.Dir,
 		ExitStatus: statusCode(err),
@@ -430,4 +473,32 @@ func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResu
 	}
 
 	return cmdResult, err
+}
+
+// cloneRepository is responsible for get the latest code version of pipeline repository.
+// Creates and returns the DefaultBaseDir for the pipeline and the latest commit in the repository.
+func cloneRepository(defaultBaseDir, url string) (string, error) {
+	if err := os.RemoveAll(defaultBaseDir); err != nil {
+		return "", fmt.Errorf("error cloning the repository. error removing previous directory: %q", err)
+	}
+
+	log.Printf("Cloning the repository [%s] into [%s]\n\n", url, defaultBaseDir)
+	r, err := git.PlainClone(defaultBaseDir, false, &git.CloneOptions{
+		URL:      url,
+		Progress: os.Stdout,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error cloning the repository: %q", err)
+	}
+
+	ref, err := r.Head()
+	if err != nil {
+		return "", fmt.Errorf("error cloning the repository. error getting the HEAD reference of the repository: %q", err)
+	}
+
+	commit, err := r.CommitObject(ref.Hash())
+	if err != nil {
+		return "", fmt.Errorf("error cloning the repository. error getting the lattest commit of the repository: %q", err)
+	}
+	return commit.Hash.String(), nil
 }

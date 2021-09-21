@@ -2,42 +2,39 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/dadosjusbr/executor"
 )
 
 func main() {
-	goPath := os.Getenv("GOPATH")
-	if goPath == "" {
-		log.Fatal("GOPATH env var can not be empty")
-	}
-	baseDir := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
-
 	stageGoRunEnv := map[string]string{
-		"URL":           "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
+		"URL":           "https://raw.githubusercontent.com/dadosjusbr/coletores/master/mpal/src/output_test/membros_ativos-6-2021.json",
 		"OUTPUT_FOLDER": "/output",
 	}
 
 	stagePythonRunEnv := map[string]string{
 		"OUTPUT_FOLDER": "/output",
 	}
-
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
 	p := executor.Pipeline{}
 	p.Name = "Tutorial"
-	p.DefaultBaseDir = baseDir
 	p.Stages = []executor.Stage{
 		{
 			Name:   "Get data from API Dadosjusbr",
-			Dir:    "stage-go",
 			RunEnv: stageGoRunEnv,
+			Repo:   "github.com/dadosjusbr/example-stage-go",
 		},
 		{
-			Name:   "Convert the Dadosjusbr json to csv",
-			Dir:    "stage-python",
+			Name: "Convert the Dadosjusbr json to csv",
+			Dir:  filepath.Join(wd, "stage-python"),
+
 			RunEnv: stagePythonRunEnv,
 		},
 	}

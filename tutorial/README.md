@@ -44,7 +44,7 @@ ENTRYPOINT ["./main"]
 ```
 Repare na criação da pasta `/output` dentro do container. É essa pasta que será espelhada com a nossa pasta `tutorial/output`local.
 
-### [*main.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/stage-go/main.go)
+### [*main.go*](https://github.com/dadosjusbr/example-stage-go/blob/master/main.go)
 ``` go
 package main
 
@@ -86,6 +86,8 @@ func main() {
 	fmt.Println(string(data))
 }
 ```
+Notem que o primeiro estágio está em outro repositório. Este repositório vai ser clonado em um diretório temporário e então a compilação e execução do contêiner ocorrerão.
+
 Um ponto a ser destacado aqui é a utilização do pacote [status](https://github.com/dadosjusbr/executor/tree/master/status). Esse pacote tem o objetivo de padronizar os status de execução dos coletores DadosJusBR e de possíveis erros em estágios de um Pipeline.
 
 ## Segundo estágio: [stage-python](https://github.com/dadosjusbr/executor/tree/master/tutorial/stage-python)
@@ -134,34 +136,43 @@ df.to_csv(file_name, index=False)
 
 ### [*tutorial.go*](https://github.com/dadosjusbr/executor/blob/master/tutorial/tutorial.go)
 ``` go
-func main() {
-	goPath := os.Getenv("GOPATH")
-	if goPath == "" {
-		log.Fatal("GOPATH env var can not be empty")
-	}
-	baseDir := fmt.Sprintf("%s/src/github.com/dadosjusbr/executor/tutorial", goPath)
+package main
 
+import (
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+
+	"github.com/dadosjusbr/executor"
+)
+
+func main() {
 	stageGoRunEnv := map[string]string{
-		"URL":           "https://dadosjusbr.org/api/v1/orgao/trt13/2020/4",
+		"URL":           "https://raw.githubusercontent.com/dadosjusbr/coletores/master/mpal/src/output_test/membros_ativos-6-2021.json",
 		"OUTPUT_FOLDER": "/output",
 	}
 
 	stagePythonRunEnv := map[string]string{
 		"OUTPUT_FOLDER": "/output",
 	}
-
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
 	p := executor.Pipeline{}
 	p.Name = "Tutorial"
-	p.DefaultBaseDir = baseDir
 	p.Stages = []executor.Stage{
 		{
 			Name:   "Get data from API Dadosjusbr",
-			Dir:    "stage-go",
 			RunEnv: stageGoRunEnv,
+			Repo:   "https://github.com/dadosjusbr/example-stage-go",
 		},
 		{
-			Name:   "Convert the Dadosjusbr json to csv",
-			Dir:    "stage-python",
+			Name: "Convert the Dadosjusbr json to csv",
+			Dir:  filepath.Join(wd, "stage-python"),
+
 			RunEnv: stagePythonRunEnv,
 		},
 	}
@@ -187,10 +198,6 @@ tutorial
 | |__ result.json
 | |__ result.csv
 |
-|__ stage-go/
-| |__ Dockerfile
-| |__ main.go
-|
 |__ stage-python/
 | |__ Dockerfile
 | |__ script.
@@ -199,61 +206,154 @@ tutorial
 |__ result_pipeline.json
 ```
 
-E esse é o nosso [result_pipeline.json](https://gist.github.com/Lorenaps/8392742a733344f7001f70eaa4b05e72):
+E esse é o nosso [result_pipeline.json](https://gist.github.com/danielfireman/e742fdcc4f21b4592bfb70b14d172248):
 
 ``` json
 {
  "name": "Tutorial",
  "stageResult": [
   {
-   "stage": "Get data from API Dadosjusbr",
-   "start": "2020-08-21T14:47:59.536805914-03:00",
-   "end": "2020-08-21T14:48:06.906129997-03:00",
+   "stage": {
+    "name": "Get data from API Dadosjusbr",
+    "dir": "",
+    "repo": "https://github.com/dadosjusbr/example-stage-go",
+    "base-dir": "",
+    "build-env": null,
+    "run-env": {
+     "OUTPUT_FOLDER": "/output",
+     "URL": "https://raw.githubusercontent.com/dadosjusbr/coletores/master/mpal/src/output_test/membros_ativos-6-2021.json"
+    }
+   },
+   "commit": "2c37f8b833b869029c409a731ff64674b21d467d",
+   "start": "2021-09-20T21:27:47.386103633-03:00",
+   "end": "2021-09-20T21:27:58.945773405-03:00",
    "buildResult": {
     "stdin": "",
-    "stdout": "Sending build context to Docker daemon  6.144kB\r\r\nStep 1/8 : FROM golang:1.14.0-alpine\n ---\u003e 51e47ee4db58\nStep 2/8 : RUN mkdir /output\n ---\u003e Using cache\n ---\u003e 6d2a642ff06b\nStep 3/8 : WORKDIR /app\n ---\u003e Using cache\n ---\u003e a9ecbdbb96a6\nStep 4/8 : COPY . .\n ---\u003e Using cache\n ---\u003e 8d87932eaae6\nStep 5/8 : ENV GO111MODULE=on\n ---\u003e Using cache\n ---\u003e 568175c6a7fd\nStep 6/8 : RUN apk update \u0026\u0026 apk add git\n ---\u003e Using cache\n ---\u003e 5278823cd5b8\nStep 7/8 : RUN go build -o main\n ---\u003e Using cache\n ---\u003e 5d10280b6f3a\nStep 8/8 : ENTRYPOINT [\"./main\"]\n ---\u003e Using cache\n ---\u003e 07a5f226c304\nSuccessfully built 07a5f226c304\nSuccessfully tagged stage-go:latest\n",
+    "stdout": "Sending build context to Docker daemon  19.97kB\r\r\nStep 1/8 : FROM golang:1.14.0-alpine\n ---\u003e 51e47ee4db58\nStep 2/8 : RUN mkdir /output\n ---\u003e Using cache\n ---\u003e bd0824b6a60e\nStep 3/8 : WORKDIR /app\n ---\u003e Using cache\n ---\u003e 33e7b235c63f\nStep 4/8 : COPY . .\n ---\u003e b00f5ecb5cba\nStep 5/8 : ENV GO111MODULE=on\n ---\u003e Running in da3a396fca1c\nRemoving intermediate container da3a396fca1c\n ---\u003e bbad03f3d0ee\nStep 6/8 : RUN apk update \u0026\u0026 apk add git\n ---\u003e Running in aa4b376f1b0c\nfetch http://dl-cdn.alpinelinux.org/alpine/v3.11/main/x86_64/APKINDEX.tar.gz\nfetch http://dl-cdn.alpinelinux.org/alpine/v3.11/community/x86_64/APKINDEX.tar.gz\nv3.11.12-14-g49b29cee4b [http://dl-cdn.alpinelinux.org/alpine/v3.11/main]\nv3.11.11-124-gf2729ece5a [http://dl-cdn.alpinelinux.org/alpine/v3.11/community]\nOK: 11284 distinct packages available\n(1/5) Installing nghttp2-libs (1.40.0-r1)\n(2/5) Installing libcurl (7.79.0-r0)\n(3/5) Installing expat (2.2.9-r1)\n(4/5) Installing pcre2 (10.34-r1)\n(5/5) Installing git (2.24.4-r0)\nExecuting busybox-1.31.1-r9.trigger\nOK: 22 MiB in 20 packages\nRemoving intermediate container aa4b376f1b0c\n ---\u003e d83e5f976db5\nStep 7/8 : RUN go build -o main\n ---\u003e Running in bbcb8f4d4edf\n\u001b[91mgo: downloading github.com/dadosjusbr/executor v1.0.0\n\u001b[0mRemoving intermediate container bbcb8f4d4edf\n ---\u003e 3b0d24dba7f8\nStep 8/8 : ENTRYPOINT [\"./main\"]\n ---\u003e Running in e717301cfd9a\nRemoving intermediate container e717301cfd9a\n ---\u003e 43c5dc00da2a\nSuccessfully built 43c5dc00da2a\nSuccessfully tagged example-stage-go:latest\n",
     "stderr": "",
-    "cmd": "docker build -t stage-go .",
-    "cmdDir": "/home/lsp/projetos/go/src/github.com/dadosjusbr/executor/tutorial/stage-go",
+    "cmd": "docker build -t example-stage-go .",
+    "cmdDir": "//tmp/dadosjusbr-executor398619108/dadosjusbr/example-stage-go",
     "status": 0,
-    "env": ""
+    "env": [
+     "COLORTERM=truecolor",
+     "LANGUAGE=pt_BR:pt:en",
+     "XAUTHORITY=/run/user/1000/gdm/Xauthority",
+     "LANG=pt_BR.UTF-8",
+     "LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:",
+     "TERM=xterm-256color",
+     "DISPLAY=:0",
+     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+     "MAIL=/var/mail/root",
+     "LOGNAME=root",
+     "USER=root",
+     "HOME=/root",
+     "SHELL=/bin/bash",
+     "SUDO_COMMAND=./tutorial",
+     "SUDO_USER=daniel",
+     "SUDO_UID=1000",
+     "SUDO_GID=1000"
+    ]
    },
    "runResult": {
     "stdin": "",
-    "stdout": "[\n {\n  \"reg\": \"29949\",\n  \"name\": \"ADRIANA LEMES FERNANDES MARACAJA COUTINHO\",\n  \"role\": \"JUIZ SUBSTITUTO - NÍVEL SUPERIOR JSJS\",\n  \"type\": \"membro\",\n  \"workplace\": \"6ª VARA DO TRABALHO DE CAMPINA GRANDE\",\n  \"active\": true,\n  \"income\": {\n   \"total\": 34599.19,\n   \"wage\": 32004.65,\n   \"perks\": {\n    \"total\": 910.08,\n    \"food\": null,\n    \"transportation\": null,\n    \"pre_school\": null,\n    \"health\": null,\n    \"birth_aid\": null,\n    \"housing_aid\": null,\n    \"subsistence\": null,\n    \"others\": null\n   },\n   \"other\": {\n    \"total\": 1684.46,\n    \"person_benefits\": 0,\n    \"eventual_benefits\": 1684.46,\n    \"trust_position\": null,\n    \"daily\": 0,\n    \"gratification\": 0,\n    \"origin_pos\": 0,\n    \"others\": null\n   }\n  },\n  \"discounts\": {\n   \"total\": -10612.25,\n   \"prev_contribution\": -3058.08,\n   \"ceil_retention\": 0,\n   \"income_tax\": -7554.17,\n   \"other\": {\n    \"other_discounts\": 0\n   }\n  }\n }\n]\n\n",
+    "stdout": "[{\"TPF_Desc\":\"FOLHA 13 ANIVERSARIO          \",\"Nome\":\"ADEZIA LIMA DE CARVALHO                                                         \",\"Cargo\":\"PROMOTOR DE 3ª                          \",\"Lotação\":\"PROMOTORES DE JUSTICA                   \",\"RemuneracaoCargoEfetivo\":0.00,\"OutrasVerbasRemuneratoriasLegaisJudiciais\":0.00,\"FuncaoConfiancaCargoComissao\":0.00,\"GratificacaoNatalina\":33689.16,\"Ferias\":0.00,\"AbonoPermanencia\":0.00,\"TotalRendimentosBruto\":33689.16,\"ContribuicaoPrevidenciaria\":4716.48,\"ImpostoRenda\":7098.13,\"RetencaoTetoConstitucional\":0.00,\"Total_Descontos\":11814.61,\"TOTAL_Liquido\":21874.55,\"Aux_Alimentacao\":0.00,\"Aux_Transporte\":0.00,\"Aux_Moradia\":0.00,\"Aux_FeriasIndenizadas\":0.00,\"Aux_FeriasIndenizadasEstagio\":0.00,\"Insalubridade\":0.00,\"_RemuneracaoLei6773\":0.00,\"RemuneracaoLei6818\":0.00,\"DifEntrancia\":0.00,\"RemuneracaoLei6773/Ato9/2012\":0.00,\"Remuneracao/Ato9/112018\":0.00,\"CoordGruposTrabalho\":0.00,\"ParticComissaoProjetos\":0.00,\"RemunChefiaDirecaoAsses\":0.00}]\n",
     "stderr": "",
-    "cmd": "docker run -i -v dadosjusbr:/output --rm --env URL=https://dadosjusbr.org/api/v1/orgao/trt13/2020/4 --env OUTPUT_FOLDER=/output stage-go",
-    "cmdDir": "/home/lsp/projetos/go/src/github.com/dadosjusbr/executor/tutorial/stage-go",
+    "cmd": "docker run -i -v dadosjusbr:/output --rm --env URL=\"https://raw.githubusercontent.com/dadosjusbr/coletores/master/mpal/src/output_test/membros_ativos-6-2021.json\" --env OUTPUT_FOLDER=\"/output\" example-stage-go",
+    "cmdDir": "//tmp/dadosjusbr-executor398619108/dadosjusbr/example-stage-go",
     "status": 0,
-    "env": ""
+    "env": [
+     "COLORTERM=truecolor",
+     "LANGUAGE=pt_BR:pt:en",
+     "XAUTHORITY=/run/user/1000/gdm/Xauthority",
+     "LANG=pt_BR.UTF-8",
+     "LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:",
+     "TERM=xterm-256color",
+     "DISPLAY=:0",
+     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+     "MAIL=/var/mail/root",
+     "LOGNAME=root",
+     "USER=root",
+     "HOME=/root",
+     "SHELL=/bin/bash",
+     "SUDO_COMMAND=./tutorial",
+     "SUDO_USER=daniel",
+     "SUDO_UID=1000",
+     "SUDO_GID=1000"
+    ]
    }
   },
   {
-   "stage": "Convert the Dadosjusbr json to csv",
-   "start": "2020-08-21T14:48:06.90613194-03:00",
-   "end": "2020-08-21T14:52:04.215821387-03:00",
+   "stage": {
+    "name": "Convert the Dadosjusbr json to csv",
+    "dir": "/home/daniel/repos/dadosjubsr/executor/tutorial/stage-python",
+    "repo": "",
+    "base-dir": "",
+    "build-env": null,
+    "run-env": {
+     "OUTPUT_FOLDER": "/output"
+    }
+   },
+   "commit": "",
+   "start": "2021-09-20T21:27:58.947032655-03:00",
+   "end": "2021-09-20T21:28:00.078091536-03:00",
    "buildResult": {
     "stdin": "",
-    "stdout": "Sending build context to Docker daemon  4.096kB\r\r\nStep 1/7 : FROM python:3.7.2-slim\n ---\u003e f46a51a4d255\nStep 2/7 : RUN mkdir /output\n ---\u003e Running in f1055c9905d3\nRemoving intermediate container f1055c9905d3\n ---\u003e ec07becad9cc\nStep 3/7 : WORKDIR /app\n ---\u003e Running in 708b232a6499\nRemoving intermediate container 708b232a6499\n ---\u003e 49fb2d6368b0\nStep 4/7 : COPY . .\n ---\u003e 7183f7f74834\nStep 5/7 : RUN pip install --upgrade pip\n ---\u003e Running in eb0d51f3969d\nCollecting pip\n  Downloading https://files.pythonhosted.org/packages/5a/4a/39400ff9b36e719bdf8f31c99fe1fa7842a42fa77432e584f707a5080063/pip-20.2.2-py2.py3-none-any.whl (1.5MB)\nInstalling collected packages: pip\n  Found existing installation: pip 19.0.3\n    Uninstalling pip-19.0.3:\n      Successfully uninstalled pip-19.0.3\nSuccessfully installed pip-20.2.2\nRemoving intermediate container eb0d51f3969d\n ---\u003e bab49b3c2c44\nStep 6/7 : RUN pip install --no-cache-dir -r requirements.txt\n ---\u003e Running in 901ce120b456\nCollecting numpy==1.19.0\n  Downloading numpy-1.19.0-cp37-cp37m-manylinux2010_x86_64.whl (14.6 MB)\nCollecting pandas==1.0.5\n  Downloading pandas-1.0.5-cp37-cp37m-manylinux1_x86_64.whl (10.1 MB)\nCollecting python-dateutil==2.8.1\n  Downloading python_dateutil-2.8.1-py2.py3-none-any.whl (227 kB)\nCollecting pytz==2020.1\n  Downloading pytz-2020.1-py2.py3-none-any.whl (510 kB)\nCollecting six==1.15.0\n  Downloading six-1.15.0-py2.py3-none-any.whl (10 kB)\nInstalling collected packages: numpy, pytz, six, python-dateutil, pandas\nSuccessfully installed numpy-1.19.0 pandas-1.0.5 python-dateutil-2.8.1 pytz-2020.1 six-1.15.0\nRemoving intermediate container 901ce120b456\n ---\u003e fb77bc3632f9\nStep 7/7 : CMD [\"python\", \"./script.py\"]\n ---\u003e Running in 7e2ed0033146\nRemoving intermediate container 7e2ed0033146\n ---\u003e 5483ee8fc5e6\nSuccessfully built 5483ee8fc5e6\nSuccessfully tagged stage-python:latest\n",
+    "stdout": "Sending build context to Docker daemon  4.096kB\r\r\nStep 1/7 : FROM python:3.7.2-slim\n ---\u003e f46a51a4d255\nStep 2/7 : RUN mkdir /output\n ---\u003e Using cache\n ---\u003e d93270e7590b\nStep 3/7 : WORKDIR /app\n ---\u003e Using cache\n ---\u003e af08aa630c2f\nStep 4/7 : COPY . .\n ---\u003e Using cache\n ---\u003e 78381b5f0afd\nStep 5/7 : RUN pip install --upgrade pip\n ---\u003e Using cache\n ---\u003e b002abfff25e\nStep 6/7 : RUN pip install --no-cache-dir -r requirements.txt\n ---\u003e Using cache\n ---\u003e abf292341af0\nStep 7/7 : CMD [\"python\", \"./script.py\"]\n ---\u003e Using cache\n ---\u003e 9374a16b41a4\nSuccessfully built 9374a16b41a4\nSuccessfully tagged stage-python:latest\n",
     "stderr": "",
     "cmd": "docker build -t stage-python .",
-    "cmdDir": "/home/lsp/projetos/go/src/github.com/dadosjusbr/executor/tutorial/stage-python",
+    "cmdDir": "//home/daniel/repos/dadosjubsr/executor/tutorial/stage-python",
     "status": 0,
-    "env": ""
+    "env": [
+     "COLORTERM=truecolor",
+     "LANGUAGE=pt_BR:pt:en",
+     "XAUTHORITY=/run/user/1000/gdm/Xauthority",
+     "LANG=pt_BR.UTF-8",
+     "LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:",
+     "TERM=xterm-256color",
+     "DISPLAY=:0",
+     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+     "MAIL=/var/mail/root",
+     "LOGNAME=root",
+     "USER=root",
+     "HOME=/root",
+     "SHELL=/bin/bash",
+     "SUDO_COMMAND=./tutorial",
+     "SUDO_USER=daniel",
+     "SUDO_UID=1000",
+     "SUDO_GID=1000"
+    ]
    },
    "runResult": {
-    "stdin": "[\n {\n  \"reg\": \"29949\",\n  \"name\": \"ADRIANA LEMES FERNANDES MARACAJA COUTINHO\",\n  \"role\": \"JUIZ SUBSTITUTO - NÍVEL SUPERIOR JSJS\",\n  \"type\": \"membro\",\n  \"workplace\": \"6ª VARA DO TRABALHO DE CAMPINA GRANDE\",\n  \"active\": true,\n  \"income\": {\n   \"total\": 34599.19,\n   \"wage\": 32004.65,\n   \"perks\": {\n    \"total\": 910.08,\n    \"food\": null,\n    \"transportation\": null,\n    \"pre_school\": null,\n    \"health\": null,\n    \"birth_aid\": null,\n    \"housing_aid\": null,\n    \"subsistence\": null,\n    \"others\": null\n   },\n   \"other\": {\n    \"total\": 1684.46,\n    \"person_benefits\": 0,\n    \"eventual_benefits\": 1684.46,\n    \"trust_position\": null,\n    \"daily\": 0,\n    \"gratification\": 0,\n    \"origin_pos\": 0,\n    \"others\": null\n   }\n  },\n  \"discounts\": {\n   \"total\": -10612.25,\n   \"prev_contribution\": -3058.08,\n   \"ceil_retention\": 0,\n   \"income_tax\": -7554.17,\n   \"other\": {\n    \"other_discounts\": 0\n   }\n  }\n }\n]\n\n",
+    "stdin": "[{\"TPF_Desc\":\"FOLHA 13 ANIVERSARIO          \",\"Nome\":\"ADEZIA LIMA DE CARVALHO                                                         \",\"Cargo\":\"PROMOTOR DE 3ª                          \",\"Lotação\":\"PROMOTORES DE JUSTICA                   \",\"RemuneracaoCargoEfetivo\":0.00,\"OutrasVerbasRemuneratoriasLegaisJudiciais\":0.00,\"FuncaoConfiancaCargoComissao\":0.00,\"GratificacaoNatalina\":33689.16,\"Ferias\":0.00,\"AbonoPermanencia\":0.00,\"TotalRendimentosBruto\":33689.16,\"ContribuicaoPrevidenciaria\":4716.48,\"ImpostoRenda\":7098.13,\"RetencaoTetoConstitucional\":0.00,\"Total_Descontos\":11814.61,\"TOTAL_Liquido\":21874.55,\"Aux_Alimentacao\":0.00,\"Aux_Transporte\":0.00,\"Aux_Moradia\":0.00,\"Aux_FeriasIndenizadas\":0.00,\"Aux_FeriasIndenizadasEstagio\":0.00,\"Insalubridade\":0.00,\"_RemuneracaoLei6773\":0.00,\"RemuneracaoLei6818\":0.00,\"DifEntrancia\":0.00,\"RemuneracaoLei6773/Ato9/2012\":0.00,\"Remuneracao/Ato9/112018\":0.00,\"CoordGruposTrabalho\":0.00,\"ParticComissaoProjetos\":0.00,\"RemunChefiaDirecaoAsses\":0.00}]\n",
     "stdout": "",
     "stderr": "",
-    "cmd": "docker run -i -v dadosjusbr:/output --rm --env OUTPUT_FOLDER=/output stage-python",
-    "cmdDir": "/home/lsp/projetos/go/src/github.com/dadosjusbr/executor/tutorial/stage-python",
+    "cmd": "docker run -i -v dadosjusbr:/output --rm --env OUTPUT_FOLDER=\"/output\" stage-python",
+    "cmdDir": "//home/daniel/repos/dadosjubsr/executor/tutorial/stage-python",
     "status": 0,
-    "env": ""
+    "env": [
+     "COLORTERM=truecolor",
+     "LANGUAGE=pt_BR:pt:en",
+     "XAUTHORITY=/run/user/1000/gdm/Xauthority",
+     "LANG=pt_BR.UTF-8",
+     "LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:",
+     "TERM=xterm-256color",
+     "DISPLAY=:0",
+     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+     "MAIL=/var/mail/root",
+     "LOGNAME=root",
+     "USER=root",
+     "HOME=/root",
+     "SHELL=/bin/bash",
+     "SUDO_COMMAND=./tutorial",
+     "SUDO_USER=daniel",
+     "SUDO_UID=1000",
+     "SUDO_GID=1000"
+    ]
    }
   }
  ],
- "start": "2020-08-21T14:47:59.450664564-03:00",
- "final": "2020-08-21T14:52:04.361930031-03:00",
- "status": 0
+ "start": "2021-09-20T21:27:47.357009506-03:00",
+ "final": "2021-09-20T21:28:00.106597287-03:00",
+ "status": "OK"
 }
 ```
