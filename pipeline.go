@@ -189,8 +189,9 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			stage.BaseDir = p.DefaultBaseDir
 		}
 		id := fmt.Sprintf("%s/%s", p.Name, stage.Name)
+		idContainer := strings.ReplaceAll(strings.ToLower(stage.Name), " ", "-")
 		// 'index+1' because the index starts from 0.
-		log.Printf("Executing Pipeline %s [%d/%d]\n", id, index+1, len(p.Stages))
+		log.Printf("\nExecuting Pipeline Stage %s [%d/%d]\n", id, index+1, len(p.Stages))
 
 		// if there the field "repo" is set for the stage, clone it and update
 		// its baseDir and commit id.
@@ -220,9 +221,8 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", ser.CommitID, stage.BaseDir)
 		}
 
-		dir := fmt.Sprintf("%s/%s", stage.BaseDir, stage.Dir)
 		stage.BuildEnv = mergeEnv(p.DefaultBuildEnv, stage.BuildEnv)
-		ser.BuildResult, err = buildImage(id, dir, stage.BuildEnv)
+		ser.BuildResult, err = buildImage(idContainer, stage.BaseDir, stage.Dir, stage.BuildEnv)
 		if err != nil {
 			m := fmt.Sprintf("error when building image: %s", err)
 			return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
@@ -232,7 +232,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			return handleError(&result, ser, status.BuildError, m, p.ErrorHandler)
 
 		}
-		log.Println("Image built sucessfully!")
+		log.Printf("Image built sucessfully!\n\n")
 
 		stdout := ""
 		if index != 0 {
@@ -241,7 +241,7 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		}
 
 		stage.RunEnv = mergeEnv(p.DefaultRunEnv, stage.RunEnv)
-		ser.RunResult, err = runImage(id, dir, stdout, stage.RunEnv)
+		ser.RunResult, err = runImage(idContainer, stage.BaseDir, stage.Dir, stdout, stage.RunEnv)
 		if err != nil {
 			m := fmt.Sprintf("error when running image: %s", err)
 			return handleError(&result, ser, status.RunError, m, p.ErrorHandler)
@@ -262,9 +262,8 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 				return result, status.NewError(status.SystemError, fmt.Errorf("error removing temp dir(%s): %q", stage.BaseDir, err))
 			}
 			log.Printf("Cloned repo temp dir removed successfully!\n\n")
-		} else {
-			fmt.Printf("\n")
 		}
+		fmt.Printf("\n")
 		result.StageResults = append(result.StageResults, ser)
 	}
 
@@ -316,7 +315,7 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 		serError.StartTime = time.Now()
 
 		id := fmt.Sprintf("%s/%s calls Error Handler", result.Name, previousSer.Stage)
-		serError.BuildResult, err = buildImage(id, handler.Dir, handler.BuildEnv)
+		serError.BuildResult, err = buildImage(id, handler.BaseDir, handler.Dir, handler.BuildEnv)
 		if err != nil {
 			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
@@ -336,7 +335,7 @@ func handleError(result *PipelineResult, previousSer StageExecutionResult, previ
 		if err != nil {
 			return *result, status.NewError(status.ErrorHandlerError, fmt.Errorf("error in parser StageExecutionResult for error handler: %s", err))
 		}
-		serError.RunResult, err = runImage(id, handler.Dir, string(erStdin), handler.RunEnv)
+		serError.RunResult, err = runImage(id, handler.BaseDir, handler.Dir, string(erStdin), handler.RunEnv)
 		if err != nil {
 			result.StageResults = append(result.StageResults, serError)
 			result.Status = status.Text(status.ErrorHandlerError)
@@ -372,16 +371,17 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 
 // buildImage executes the 'docker build' for a image, considering the
 // parameters defined for it and returns a CmdResult and an error, if any.
-func buildImage(id, dir string, buildEnv map[string]string) (CmdResult, error) {
+func buildImage(id, baseDir, stageDir string, buildEnv map[string]string) (CmdResult, error) {
 	log.Printf("Building image for %s", id)
 
+	dir := filepath.Join(baseDir, stageDir)
 	var b strings.Builder
 	for k, v := range buildEnv {
 		fmt.Fprintf(&b, "--build-arg %s=%s ", k, fmt.Sprintf(`"%s"`, v))
 	}
 	env := b.String()
 
-	cmdStr := fmt.Sprintf("docker build %s-t %s .", env, filepath.Base(dir))
+	cmdStr := fmt.Sprintf("docker build %s-t %s .", env, id)
 	// sh -c is a workaround that allow us to have double quotes around environment variable values.
 	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
 	// TREPB.
@@ -431,16 +431,16 @@ func statusCode(err error) int {
 // runImage executes the 'docker run' for a image, considering the
 // parameters defined for it and returns a CmdResult and an error, if any.
 // It uses the stdout from the previous stage as the stdin for this new command.
-func runImage(id, dir, previousStdout string, runEnv map[string]string) (CmdResult, error) {
+func runImage(id, baseDir, stageDir, previousStdout string, runEnv map[string]string) (CmdResult, error) {
 	log.Printf("Running image for %s", id)
-
+	dir := filepath.Join(baseDir, stageDir)
 	var builder strings.Builder
 	for key, value := range runEnv {
 		fmt.Fprintf(&builder, "--env %s=%s ", key, fmt.Sprintf(`"%s"`, value))
 	}
 	env := strings.TrimRight(builder.String(), " ")
 
-	cmdStr := fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, filepath.Base(dir))
+	cmdStr := fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", env, id)
 	// sh -c is a workaround that allow us to have double quotes around environment variable values.
 	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
 	// TREPB.
