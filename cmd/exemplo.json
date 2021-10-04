@@ -1,0 +1,14 @@
+{   
+    "name": "tutorial",
+    "stages":[
+        {
+            "name": "estágio-go",
+            "repo": "https://github.com/dadosjusbr/example-stage-go"
+        }, 
+        {
+            "name": "estagio-python",
+            "repo": "https://github.com/dadosjusbr/executor",
+            "dir": "tutorial/stage-python"
+        }
+    ]
+}
