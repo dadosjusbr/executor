@@ -2,16 +2,26 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
-	"os"
 
 	"github.com/dadosjusbr/executor"
 )
 
+var (
+	input = flag.String("in", "", "Path for the descriptor file.")
+)
+
 func main() {
-	in, err := io.ReadAll(os.Stdin)
+	flag.Parse()
+
+	if *input == "" {
+		log.Fatal("Path to the input file not found. Forgot --in?")
+	}
+
+	in, err := ioutil.ReadFile(*input)
 	if err != nil {
 		log.Fatalf("Erro lendo dados da entrada padrão: %q", err)
 	}

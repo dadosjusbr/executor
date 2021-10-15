@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -235,7 +236,14 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 		log.Printf("Image built sucessfully!\n\n")
 
 		stdout := ""
-		if index != 0 {
+		if index == 0 {
+			in, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				log.Printf("Erro lendo dados da entrada padrão: %q. Continuando...", err)
+			} else {
+				stdout = string(in)
+			}
+		} else {
 			// 'index-1' is accessing the output from previous stage.
 			stdout = result.StageResults[index-1].RunResult.Stdout
 		}
