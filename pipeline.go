@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/url"
 	"os"
@@ -237,11 +238,20 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 		stdout := ""
 		if index == 0 {
-			in, err := io.ReadAll(os.Stdin)
+			// https://stackoverflow.com/a/38612652
+			// check if stdin has data and if it comes from a pipe.
+			fi, err := os.Stdin.Stat()
 			if err != nil {
-				log.Printf("Erro lendo dados da entrada padrão: %q. Continuando...", err)
-			} else {
-				stdout = string(in)
+				log.Printf("Erro checando entrada padrão: %q. Continuando...\n", err)
+			}
+			// only consumes data if it comes from a pipe.
+			if fi.Mode()&fs.ModeCharDevice == 0 {
+				in, err := io.ReadAll(os.Stdin)
+				if err != nil {
+					log.Printf("Erro lendo dados da entrada padrão: %q. Continuando...\n", err)
+				} else {
+					stdout = string(in)
+				}
 			}
 		} else {
 			// 'index-1' is accessing the output from previous stage.
