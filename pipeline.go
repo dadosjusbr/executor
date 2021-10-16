@@ -224,7 +224,13 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 
 			// specifying commit id as environment variable.
 			if stage.RepoVersionEnvVar != "" {
+				if p.DefaultBuildEnv == nil {
+					p.DefaultBuildEnv = make(map[string]string)
+				}
 				p.DefaultBuildEnv[stage.RepoVersionEnvVar] = cid
+				if p.DefaultRunEnv == nil {
+					p.DefaultRunEnv = make(map[string]string)
+				}
 				p.DefaultRunEnv[stage.RepoVersionEnvVar] = cid
 			}
 			log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", ser.CommitID, stage.BaseDir)
