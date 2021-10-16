@@ -28,12 +28,13 @@ const (
 
 // Stage is a phase of data release process.
 type Stage struct {
-	Name     string            `json:"name" bson:"name,omitempt"`           // Stage's name.
-	Dir      string            `json:"dir" bson:"dir,omitempt"`             // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
-	Repo     string            `json:"repo" bson:"repo,omitempt"`           // Repository URL from where to clone the pipeline stage.
-	BaseDir  string            `json:"base-dir" bson:"base-dir,omitempt"`   // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
-	BuildEnv map[string]string `json:"build-env" bson:"build-env,omitempt"` // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
-	RunEnv   map[string]string `json:"run-env" bson:"run-env,omitempt"`     // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	Name              string            `json:"name" bson:"name,omitempt"`                                 // Stage's name.
+	Dir               string            `json:"dir" bson:"dir,omitempt"`                                   // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	Repo              string            `json:"repo" bson:"repo,omitempt"`                                 // Repository URL from where to clone the pipeline stage.
+	BaseDir           string            `json:"base-dir" bson:"base-dir,omitempt"`                         // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
+	BuildEnv          map[string]string `json:"build-env" bson:"build-env,omitempt"`                       // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	RunEnv            map[string]string `json:"run-env" bson:"run-env,omitempt"`                           // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	RepoVersionEnvVar string            `json:"repo_version_env_var" bson:"repo_version_env_var,omitempt"` // Name of the environment variable passed to build and run that represents the stage commit id.
 }
 
 // Pipeline represents the sequence of stages for data release.
@@ -220,6 +221,12 @@ func (p *Pipeline) Run() (PipelineResult, error) {
 			}
 			ser.CommitID = cid
 			stage.BaseDir = path.Join(tmpDir)
+
+			// specifying commit id as environment variable.
+			if stage.RepoVersionEnvVar != "" {
+				p.DefaultBuildEnv[stage.RepoVersionEnvVar] = cid
+				p.DefaultRunEnv[stage.RepoVersionEnvVar] = cid
+			}
 			log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", ser.CommitID, stage.BaseDir)
 		}
 
