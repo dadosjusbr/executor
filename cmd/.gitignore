@@ -2,3 +2,4 @@ executor
 out.log
 *.out
 *.prototext
+cmd
