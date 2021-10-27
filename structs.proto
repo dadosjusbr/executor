@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/dadosjusbr/executor";
+
+message PipelineExecution {
+    PipelineDef pipeline = 1;
+    string setup_error_msg = 2;
+    repeated StageExecution results  = 3;
+    string teardown_error_msg = 4;
+}
+
+message PipelineDef {
+    string name = 1;
+    string default_base_dir = 2;
+    map<string, string> default_build_env = 3;
+    map<string, string> default_run_env = 4;
+    string volume_dir = 5;
+    bool skip_volume_dir_cleanup = 6;
+    repeated StageDef stages = 7;
+    StageDef error_hander = 8;
+}
+
+message StageExecution {
+    google.protobuf.Timestamp start_time = 1;  // Beginning of the process execution.
+	google.protobuf.Timestamp finish_time = 2; // End of the process execution.
+    string container_id = 3;                   // Name of the container used to locally run the stage
+    string commit_id = 4;                      // Commit id of the stage. Only set when repo is set. 
+
+    StepExecution setup = 5;            // Details of the stage setup.
+    StepExecution build = 6;            // Details of the stage build.
+    StepExecution run = 7;              // Details of the stage run.
+    StepExecution teardown = 8;         // Details of the stage teardown.
+
+    enum Status {
+        OK = 0;
+        SETUP_ERROR = 1;
+        BUILD_ERROR = 2;
+        RUN_ERROR = 3;
+        TEARDOWN_ERROR = 4;
+    }    
+    Status status = 9;           // Summary status of the stage execution. 
+}
+
+message StepExecution {
+    string stdin = 1;                          // String containing the standard input of the process.
+    string stdout = 2;                         // String containing the standard output of the process.
+    string stderr = 3;                         // String containing the standard error of the process.
+    string cmd = 4;                            // Command that has been executed
+    string cmd_dir = 5;                        // Local directory, in which the command has been executed
+    int32 status_code = 6;                     // Exit code of the process executed
+    repeated string env = 7;                   // Copy of strings representing the environment variables in the form ke=value
+	google.protobuf.Timestamp start_time = 8;  // Beginning of the process execution.
+	google.protobuf.Timestamp finish_time = 9; // End of the process execution.
+}
+
+message StageDef {
+	string name = 1;                   // Stage's name.
+	string dir = 2;                    // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	string base_dir = 3;               // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
+	map<string, string> build_env = 4; // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+	map<string, string> run_env = 5;   // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
+    string repo = 6;                   // Repository URL from where to clone the pipeline stage.
+    string repo_version_env_var = 7;   // Name of the environment variable passed to build and run that represents the stage commit id (only when Repo is set).
+}
