@@ -1,6 +1,9 @@
 # Files .json
 *.json
 *.csv
+*.stderr
+*.stdout
+*.in
 
 # Output folder
 /tutorial/output/

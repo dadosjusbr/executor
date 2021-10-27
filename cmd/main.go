@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/dadosjusbr/executor"
+	"github.com/dadosjusbr/executor/status"
 )
 
 var (
@@ -31,11 +32,15 @@ func main() {
 		log.Fatalf("Erro convertendo pipeline da entrada padrão: %q\n\"%s\"", err, string(in))
 	}
 
+	log.Printf("Pipeline: %+v\n\n", p)
+
 	log.Printf("Executando pipeline %s", p.Name)
-	result, err := p.Run()
-	if err != nil {
-		log.Fatalf("Erro executando pipeline: %q\n\"%+v\"", err, p)
+	result := p.Run()
+	if result.Status != status.OK {
+		log.Printf("Erro executando pipeline: %s. Imprimindo resultado:\n\n", p.Name)
+		log.Printf("%+v", result)
+		return
 	}
-	log.Printf("Pipeline %s executado com sucesso!", p.Name)
+	log.Printf("Pipeline %s executado com sucesso! Imprimindo resultado:\n\n", p.Name)
 	fmt.Printf("%+v", result)
 }

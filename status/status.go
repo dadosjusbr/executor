@@ -43,6 +43,9 @@ const (
 
 	// ErrorHandlerError should be used for scenarios where the HandlerError stage return error.
 	ErrorHandlerError Code = 10
+
+	// TeardownError should be used for scenarios with teardown problemns, like fail on destroying the volume for containers.
+	TeardownError Code = 11
 )
 
 var (
@@ -58,6 +61,7 @@ var (
 		BuildError:        "Build Error",
 		RunError:          "Run Error",
 		ErrorHandlerError: "Error Handler Error",
+		TeardownError:     "Teardown Error",
 	}
 )
 
