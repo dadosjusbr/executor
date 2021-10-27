@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "github.com/dadosjusbr/executor/error";
 
-message ErrorResult {
+message Result {
     ProcInfo proc_info = 1;
 }
 
