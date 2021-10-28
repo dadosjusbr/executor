@@ -14,38 +14,35 @@ const (
 	// OK means that the process worked without errors.
 	OK Code = 0
 
-	// InvalidParameters should be used for scenarios where month and year are not valid or mandatory parameters are empty.
-	InvalidParameters Code = 1
-
-	// SystemError should be used for scenarios like i/o erros, for example a failure on opening or writing a file.
-	SystemError Code = 2
-
-	// ConnectionError should be used for scenarios with connection problems, like timeouts or service unavailable.
-	ConnectionError Code = 3
-
-	// DataUnavailable means that the desired data was not found on crawling.
-	DataUnavailable Code = 4
-
-	//InvalidFile should be used for invalid files or for scenarios where some data could not be extracted.
-	InvalidFile Code = 5
-
-	// Unknown means that something unexpected has happend.
-	Unknown Code = 6
-
 	// SetupError should be used for scenarios with setup problemns, like fail on create the volume for containers.
-	SetupError Code = 7
+	SetupError Code = 1
 
 	// BuildError should be used for scenarios with 'docker build' problemns.
-	BuildError Code = 8
+	BuildError Code = 2
 
 	// RunError should be used for scenarios with 'docker run' problemns.
-	RunError Code = 9
-
-	// ErrorHandlerError should be used for scenarios where the HandlerError stage return error.
-	ErrorHandlerError Code = 10
+	RunError Code = 3
 
 	// TeardownError should be used for scenarios with teardown problemns, like fail on destroying the volume for containers.
-	TeardownError Code = 11
+	TeardownError Code = 4
+
+	// InvalidParameters should be used for scenarios where month and year are not valid or mandatory parameters are empty.
+	InvalidParameters Code = 5
+
+	// SystemError should be used for scenarios like i/o erros, for example a failure on opening or writing a file.
+	SystemError Code = 6
+
+	// ConnectionError should be used for scenarios with connection problems, like timeouts or service unavailable.
+	ConnectionError Code = 7
+
+	// DataUnavailable means that the desired data was not found on crawling.
+	DataUnavailable Code = 8
+
+	//InvalidFile should be used for invalid files or for scenarios where some data could not be extracted.
+	InvalidFile Code = 9
+
+	// Unknown means that something unexpected has happend.
+	Unknown Code = 10
 )
 
 var (
@@ -60,7 +57,6 @@ var (
 		SetupError:        "Setup Error",
 		BuildError:        "Build Error",
 		RunError:          "Run Error",
-		ErrorHandlerError: "Error Handler Error",
 		TeardownError:     "Teardown Error",
 	}
 )

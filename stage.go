@@ -23,21 +23,6 @@ type StageExecutionResult struct {
 	Status         status.Code `json:"status" bson:"status,omitempty"`                 // Final execution status of the stage.
 }
 
-// errResult returns the result of the command execution which errored.
-func (ser *StageExecutionResult) errResult() *CmdResult {
-	switch ser.Status {
-	case status.SetupError:
-		return &ser.SetupResult
-	case status.BuildError:
-		return &ser.BuildResult
-	case status.RunError:
-		return &ser.RunResult
-	case status.TeardownError:
-		return &ser.TeardownResult
-	}
-	return nil
-}
-
 // Stage is a phase of data release process.
 type Stage struct {
 	Name              string            `json:"name" bson:"name,omitempt"`                                 // Stage's name.
