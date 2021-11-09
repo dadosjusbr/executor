@@ -157,20 +157,13 @@ func (p *Pipeline) Run() PipelineResult {
 }
 
 func (p *Pipeline) setup() error {
-	if p.SkipVolumeDirCleanup {
-		log.Printf("Skipping removing volume directory")
-	} else {
-		log.Printf("Cleaning up directory:%s\n", p.VolumeDir)
-		log.Printf("$ rm -rf %s", p.VolumeDir)
-		if err := os.RemoveAll(p.VolumeDir); err != nil {
-			return fmt.Errorf("error removing shared dir(%s): %w", p.VolumeDir, err)
-		}
-		log.Printf("$ mkdir -m %d %s", dirPermission, p.VolumeDir)
-		if err := os.Mkdir(p.VolumeDir, dirPermission); err != nil {
-			return fmt.Errorf("error (re)creating shared dir(%s) with permissions(%d): %w", p.VolumeDir, dirPermission, err)
-		}
-		log.Printf("Director %s cleaned sucessfully!\n", p.VolumeDir)
+	log.Printf("Setting up directory:%s\n", p.VolumeDir)
+	log.Printf("$ mkdir -m %d %s", dirPermission, p.VolumeDir)
+	if err := os.MkdirAll(p.VolumeDir, dirPermission); err != nil {
+		return fmt.Errorf("error (re)creating shared dir(%s) with permissions(%d): %w", p.VolumeDir, dirPermission, err)
 	}
+	log.Printf("Director %s created sucessfully!\n", p.VolumeDir)
+
 	log.Printf("Creating volume dadosjusbr:%s\n", p.VolumeDir)
 	if p.VolumeDir == "" {
 		log.Printf("Option shared-dir not set. Using \"/output\"\n")
