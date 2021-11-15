@@ -3,7 +3,11 @@
 *.csv
 *.stderr
 *.stdout
+*.stdin
 *.in
+*.err
+*.out
+*.zip
 
 # Output folder
 /tutorial/output/

@@ -14,6 +14,8 @@ import (
 
 var (
 	input          = pflag.String("in", "", "Path for the descriptor file.")
+	volumeName     = pflag.String("volume-name", "", "Shared volume name.")
+	volumeDir      = pflag.String("volume-dir", "", "Shared volume full path.")
 	defaultEnvFlag = pflag.StringSlice("def-run-env", []string{}, "Environment variables that override the default vars.")
 )
 
@@ -46,11 +48,18 @@ func main() {
 	p.DefaultRunEnv = mergeMaps(p.DefaultRunEnv, defaultEnv) // merging maps.
 	log.Printf("Pipeline: %+v\n\n", p)
 
+	// the flag replaces the pipeline description. Useful at runtime.
+	if *volumeName != "" {
+		p.VolumeName = *volumeName
+	}
 	if p.VolumeName == "" {
 		log.Printf("Você não setou o campo volume-name, usando \"dadosjusbr\"")
 		p.VolumeName = "dadosjusbr"
 	}
 
+	if *volumeDir != "" {
+		p.VolumeDir = *volumeDir
+	}
 	if p.VolumeDir == "" {
 		log.Printf("Você não setou o campo volume-name, usando \"dadosjusbr\"")
 		p.VolumeDir = "/output"

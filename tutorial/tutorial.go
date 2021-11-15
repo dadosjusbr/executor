@@ -25,16 +25,16 @@ func main() {
 	}
 	p := executor.Pipeline{}
 	p.Name = "Tutorial"
-	p.VolumeName = "dadosjusbrTutorial"
+	p.VolumeName = "executorTutorial"
 	p.VolumeDir = "/output"
 	p.Stages = []executor.Stage{
 		{
-			Name:   "Get data from API Dadosjusbr",
+			Name:   "Stage Go",
 			RunEnv: stageGoRunEnv,
 			Repo:   "github.com/dadosjusbr/example-stage-go",
 		},
 		{
-			Name:    "Convert the Dadosjusbr json to csv",
+			Name:    "Stage Python",
 			BaseDir: wd,
 			Dir:     "stage-python",
 			RunEnv:  stagePythonRunEnv,
