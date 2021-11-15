@@ -33,6 +33,8 @@ type Stage struct {
 	RunEnv            map[string]string `json:"run-env" bson:"run-env,omitempt"`                           // Variables to be used in the stage run. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
 	RepoVersionEnvVar string            `json:"repo_version_env_var" bson:"repo_version_env_var,omitempt"` // Name of the environment variable passed to build and run that represents the stage commit id.
 	ContainerID       string            `json:"container-id" bson:"container-id,omitempty"`                // ID of the container running used to run the stage.
+	VolumeName        string            `json:"volume-name" bson:"volume-name,omitempty"`                  // Name of the shared volume.
+	VolumeDir         string            `json:"volume-dir" bson:"volume-dir,omitempty"`                    // Directory of the shared volume.
 
 	internalID string // Stage internal identification.
 	index      int    // Stage position in the pipeline.
@@ -117,6 +119,12 @@ func (stage *Stage) setup(pipeline Pipeline) (CmdResult, error) {
 	if stage.ContainerID == "" {
 		stage.ContainerID = strings.ReplaceAll(strings.ToLower(stage.Name), " ", "-")
 	}
+	if stage.VolumeName == "" {
+		stage.VolumeName = pipeline.VolumeName
+	}
+	if stage.VolumeDir == "" {
+		stage.VolumeDir = pipeline.VolumeDir
+	}
 
 	// if there the field "repo" is set for the stage, clone it and update
 	// its baseDir and commit id.
@@ -163,7 +171,7 @@ func (stage *Stage) buildImage() (CmdResult, error) {
 }
 
 func (stage *Stage) runImage(stdin string) (CmdResult, error) {
-	r, err := runImage(stage.ContainerID, stage.BaseDir, stage.Dir, stdin, stage.RunEnv)
+	r, err := runImage(stage.ContainerID, stage.BaseDir, stage.Dir, stage.VolumeName, stage.VolumeDir, stdin, stage.RunEnv)
 	if err != nil {
 		return r, fmt.Errorf("error when running image: %s", err)
 	}

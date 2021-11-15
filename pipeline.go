@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	noExitError      = -2
-	defaultVolumeDir = "output"
-	dirPermission    = 0666
+	noExitError   = -2
+	dirPermission = 0666
 )
 
 // Pipeline represents the sequence of stages for data release.
@@ -31,6 +30,7 @@ type Pipeline struct {
 	ErrorHandler         Stage             `json:"error-handler" bson:"error-handler,omitempt"`                     // Default stage to deal with any errors that occur in the execution of the pipeline.
 	SkipVolumeDirCleanup bool              `json:"skip-volume-dir-cleanup" bson:"skip-volume-dir-cleanup,omitempt"` // Skip pipeline's volume setup. Useful for debugging long-running pipelines.
 	VolumeDir            string            `json:"volume-dir" bson:"volume-dir,omitempt"`                           // Pipeline's output directory. Shared accross all pipeline stages.
+	VolumeName           string            `json:"volume-name" bson:"volume-name,omitempt"`                         // Pipeline's name. Shared accross all pipeline stages.
 }
 
 // PipelineResult represents the pipeline information and their results.
@@ -157,31 +157,37 @@ func (p *Pipeline) Run() PipelineResult {
 }
 
 func (p *Pipeline) setup() error {
+	if p.VolumeDir == "" || p.VolumeName == "" {
+		log.Printf("volume-dir or volume-name not set, skipping shared volume setup.")
+		return nil
+	}
+
 	log.Printf("Setting up directory:%s\n", p.VolumeDir)
 	log.Printf("$ mkdir -m %d %s", dirPermission, p.VolumeDir)
 	if err := os.MkdirAll(p.VolumeDir, dirPermission); err != nil {
 		return fmt.Errorf("error (re)creating shared dir(%s) with permissions(%d): %w", p.VolumeDir, dirPermission, err)
 	}
-	log.Printf("Director %s created sucessfully!\n", p.VolumeDir)
+	log.Printf("Directory %s created sucessfully!\n", p.VolumeDir)
 
-	log.Printf("Creating volume dadosjusbr:%s\n", p.VolumeDir)
-	if p.VolumeDir == "" {
-		log.Printf("Option shared-dir not set. Using \"/output\"\n")
-		p.VolumeDir = defaultVolumeDir
-	}
-	if err := createVolume(p.VolumeDir); err != nil {
+	log.Printf("Creating volume %s:%s\n", p.VolumeName, p.VolumeDir)
+	if err := createVolume(p.VolumeDir, p.VolumeName); err != nil {
 		return err
 	}
-	log.Printf("Volume dadosjusbr:%s create sucessfully!\n", p.VolumeDir)
+	log.Printf("Volume %s:%s create sucessfully!\n", p.VolumeName, p.VolumeDir)
 	return nil
 }
 
 func (p *Pipeline) teardown() error {
-	log.Printf("Removing volume dadosjusbr:%s\n", p.VolumeDir)
-	if err := removeVolume(p.VolumeDir); err != nil {
+	if p.VolumeDir == "" || p.VolumeName == "" {
+		log.Printf("volume-dir or volume-name not set, skipping shared volume teardown.")
+		return nil
+	}
+
+	log.Printf("Removing volume %s:%s\n", p.VolumeName, p.VolumeDir)
+	if err := removeVolume(p.VolumeName); err != nil {
 		return err
 	}
-	log.Printf("Volume dadosjusbr:%s removed sucessfully!\n", p.VolumeDir)
+	log.Printf("Volume %s:%s removed sucessfully!\n", p.VolumeName, p.VolumeDir)
 
 	if p.SkipVolumeDirCleanup {
 		log.Printf("Skipping removing volume directory")

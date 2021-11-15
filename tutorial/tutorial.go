@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/dadosjusbr/executor"
+	"github.com/dadosjusbr/executor/status"
 )
 
 func main() {
@@ -25,6 +25,8 @@ func main() {
 	}
 	p := executor.Pipeline{}
 	p.Name = "Tutorial"
+	p.VolumeName = "dadosjusbrTutorial"
+	p.VolumeDir = "/output"
 	p.Stages = []executor.Stage{
 		{
 			Name:   "Get data from API Dadosjusbr",
@@ -32,21 +34,20 @@ func main() {
 			Repo:   "github.com/dadosjusbr/example-stage-go",
 		},
 		{
-			Name: "Convert the Dadosjusbr json to csv",
-			Dir:  filepath.Join(wd, "stage-python"),
-
-			RunEnv: stagePythonRunEnv,
+			Name:    "Convert the Dadosjusbr json to csv",
+			BaseDir: wd,
+			Dir:     "stage-python",
+			RunEnv:  stagePythonRunEnv,
 		},
 	}
 
-	result, err := p.Run()
-	if err != nil {
+	result := p.Run()
+	if result.Status == status.OK {
 		saveReport(result, "result_pipeline_error.json")
 
-		log.Fatal(err)
+		log.Fatalf("Error executing pipeline. Status:%v\n", result.Status)
 	}
 	saveReport(result, "result_pipeline.json")
-
 }
 
 func saveReport(result executor.PipelineResult, fileName string) {

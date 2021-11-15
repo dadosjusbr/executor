@@ -46,6 +46,16 @@ func main() {
 	p.DefaultRunEnv = mergeMaps(p.DefaultRunEnv, defaultEnv) // merging maps.
 	log.Printf("Pipeline: %+v\n\n", p)
 
+	if p.VolumeName == "" {
+		log.Printf("Você não setou o campo volume-name, usando \"dadosjusbr\"")
+		p.VolumeName = "dadosjusbr"
+	}
+
+	if p.VolumeDir == "" {
+		log.Printf("Você não setou o campo volume-name, usando \"dadosjusbr\"")
+		p.VolumeDir = "/output"
+	}
+
 	log.Printf("Executando pipeline %s", p.Name)
 	result := p.Run()
 	if result.Status != status.OK {

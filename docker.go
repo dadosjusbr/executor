@@ -56,7 +56,8 @@ func buildImage(id, baseDir, stageDir string, env map[string]string) (CmdResult,
 // runImage executes the 'docker run' for a image, considering the
 // parameters defined for it and returns a CmdResult and an error, if any.
 // It uses the stdout from the previous stage as the stdin for this new command.
-func runImage(id, baseDir, stageDir, stdin string, env map[string]string) (CmdResult, error) {
+// Associates a volume to the running docker image if volumeName and volumeDir are not empty strings.
+func runImage(id, baseDir, stageDir, volumeName, volumeDir, stdin string, env map[string]string) (CmdResult, error) {
 	dir := filepath.Join(baseDir, stageDir)
 	var builder strings.Builder
 	for key, value := range env {
@@ -64,7 +65,12 @@ func runImage(id, baseDir, stageDir, stdin string, env map[string]string) (CmdRe
 	}
 	envStr := strings.TrimRight(builder.String(), " ")
 
-	cmdStr := fmt.Sprintf("docker run -i -v dadosjusbr:/output --rm %s %s", envStr, id)
+	volumeStr := ""
+	if volumeName != "" && volumeDir != "" {
+		volumeStr = fmt.Sprintf("-v %s:%s", volumeName, volumeDir)
+	}
+
+	cmdStr := fmt.Sprintf("docker run -i %s --rm %s %s", volumeStr, envStr, id)
 	// sh -c is a workaround that allow us to have double quotes around environment variable values.
 	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
 	// TREPB.
@@ -99,12 +105,12 @@ func runImage(id, baseDir, stageDir, stdin string, env map[string]string) (CmdRe
 	return cmdResult, err
 }
 
-func createVolume(dir string) error {
+func createVolume(dir, name string) error {
 	baseDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("error getting working directory:%v", err)
 	}
-	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=dadosjusbr", dir), " ")
+	cmdList := strings.Split(fmt.Sprintf("docker volume create --driver local --opt type=none --opt device=%s --opt o=bind --name=%s", dir, name), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	cmd.Dir = baseDir
 	var outb, errb bytes.Buffer
@@ -123,12 +129,12 @@ func createVolume(dir string) error {
 	return nil
 }
 
-func removeVolume(dir string) error {
-	cmdList := strings.Split("docker volume rm -f dadosjusbr", " ")
+func removeVolume(volume string) error {
+	cmdList := strings.Split(fmt.Sprintf("docker volume rm -f %s", volume), " ")
 	cmd := exec.Command(cmdList[0], cmdList[1:]...)
 	log.Printf("$ %s", strings.Join(cmdList, " "))
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error removing existing volume dadosjusbr: %q", err)
+		return fmt.Errorf("error removing existing volume %s: %q", volume, err)
 	}
 	return nil
 }
