@@ -129,7 +129,7 @@ func (stage *Stage) setup(pipeline Pipeline) (CmdResult, error) {
 	// if there the field "repo" is set for the stage, clone it and update
 	// its baseDir and commit id.
 	if stage.Repo != "" {
-		rr, err := setupRepo(stage.Repo)
+		rr, err := setupRepo(stage.Repo, stage.BaseDir, stage.Dir)
 		if err != nil {
 			e := fmt.Errorf("error in setting up repo(%s) for stage %s setup: %w", stage.Repo, stage.Name, err)
 			return CmdResult{

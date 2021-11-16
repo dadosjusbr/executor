@@ -16,7 +16,7 @@ type repoSetupResult struct {
 	commitID string
 }
 
-func setupRepo(repoURL string) (repoSetupResult, error) {
+func setupRepo(repoURL, baseDir, dir string) (repoSetupResult, error) {
 	u, err := url.Parse(repoURL)
 	if err != nil {
 		return repoSetupResult{}, fmt.Errorf("error parsing repository URL: %w", err)
@@ -24,20 +24,27 @@ func setupRepo(repoURL string) (repoSetupResult, error) {
 	if u.Scheme == "" {
 		u.Scheme = "https"
 	}
-	// spaces are super bad for paths in command-line
-	tmpDir := filepath.Join(os.TempDir(), fmt.Sprintf("dadosjusbr-executor-%s", path.Base(u.Path)))
-	log.Printf("Creating directory:%s\n", tmpDir)
+	// Considering baseDir and dir.
+	if baseDir == "" {
+		baseDir = os.TempDir()
+	}
+	if dir == "" {
+		// spaces are super bad for paths in command-line
+		dir = path.Base(u.Path)
+	}
 
-	if err := os.MkdirAll(tmpDir, 0775); err != nil {
+	repoPath := filepath.Join(baseDir, dir)
+	log.Printf("Creating directory:%s\n", repoPath)
+
+	if err := os.MkdirAll(repoPath, 0775); err != nil {
 		return repoSetupResult{}, fmt.Errorf("error when creating temporary dir: %w", err)
 	}
-	cid, err := cloneRepository(tmpDir, u.String())
+	cid, err := cloneRepository(repoPath, u.String())
 	if err != nil {
 		return repoSetupResult{}, fmt.Errorf("error when cloning repo(%s): %w", repoURL, err)
 	}
-	dir := path.Join(tmpDir)
-	log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", cid, dir)
-	return repoSetupResult{dir, cid}, nil
+	log.Printf("Repo cloned successfully! Commit:%s New dir:%s\n", cid, repoPath)
+	return repoSetupResult{repoPath, cid}, nil
 }
 
 // cloneRepository is responsible for get the latest code version of pipeline repository.

@@ -16,6 +16,7 @@ var (
 	input          = pflag.String("in", "", "Path for the descriptor file.")
 	volumeName     = pflag.String("volume-name", "", "Shared volume name.")
 	volumeDir      = pflag.String("volume-dir", "", "Shared volume full path.")
+	defaultBaseDir = pflag.String("def-base-dir", "", "Base path to search for stages and to place the cloned repositorie")
 	defaultEnvFlag = pflag.StringSlice("def-run-env", []string{}, "Environment variables that override the default vars.")
 )
 
@@ -63,6 +64,10 @@ func main() {
 	if p.VolumeDir == "" {
 		log.Printf("Você não setou o campo volume-name, usando \"dadosjusbr\"")
 		p.VolumeDir = "/output"
+	}
+
+	if *defaultBaseDir != "" {
+		p.DefaultBaseDir = *defaultBaseDir
 	}
 
 	log.Printf("Executando pipeline %s", p.Name)
