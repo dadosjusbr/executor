@@ -157,6 +157,14 @@ func (p *Pipeline) Run() PipelineResult {
 }
 
 func (p *Pipeline) setup() error {
+	log.Printf("Checking pipeline spec validation\n")
+	for _, s := range p.Stages {
+		if err := s.validateSpec(); err != nil {
+			return fmt.Errorf("Stage %s spec validation failed:%v", s.Name, err)
+		}
+	}
+	log.Printf("Spec validated successfully!\n")
+
 	if p.VolumeDir == "" || p.VolumeName == "" {
 		log.Printf("volume-dir or volume-name not set, skipping shared volume setup.")
 		return nil

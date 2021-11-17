@@ -105,6 +105,42 @@ func runImage(id, baseDir, stageDir, volumeName, volumeDir, stdin string, env ma
 	return cmdResult, err
 }
 
+func pullImage(id, baseDir, stageDir string) (CmdResult, error) {
+	dir := filepath.Join(baseDir, stageDir)
+
+	cmdStr := fmt.Sprintf("docker pull %s", id)
+	// sh -c is a workaround that allow us to have double quotes around environment variable values.
+	// Those are needed when the environment variables have whitespaces, for instance a NAME, like in
+	// TREPB.
+	cmd := exec.Command("bash", "-c", cmdStr)
+	cmd.Dir = dir
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+
+	log.Printf("$ %s", cmdStr)
+	err := cmd.Run()
+	switch err.(type) {
+	case *exec.Error:
+		cmdResultError := CmdResult{
+			ExitStatus: statusCode(err),
+			Cmd:        cmdStr,
+		}
+		return cmdResultError, fmt.Errorf("command was not executed correctly: %s", err)
+	}
+
+	cmdResult := CmdResult{
+		Stdout:     outb.String(),
+		Stderr:     errb.String(),
+		Cmd:        cmdStr,
+		CmdDir:     dir,
+		ExitStatus: statusCode(err),
+		Env:        os.Environ(),
+	}
+
+	return cmdResult, err
+}
+
 func createVolume(dir, name string) error {
 	baseDir, err := os.Getwd()
 	if err != nil {

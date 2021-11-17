@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type StageExecutionResult struct {
 type Stage struct {
 	Name              string            `json:"name" bson:"name,omitempt"`                                 // Stage's name.
 	Dir               string            `json:"dir" bson:"dir,omitempt"`                                   // Directory to be concatenated with default base directory or with the base directory specified here in 'BaseDir'. This field is used to name the image built.
+	Image             string            `json:"image" bson:"image,omitempt"`                               // Docker image ID, e.g., ghcr.io/dadosjusbr/coletor-cnj:main
 	Repo              string            `json:"repo" bson:"repo,omitempt"`                                 // Repository URL from where to clone the pipeline stage.
 	BaseDir           string            `json:"base-dir" bson:"base-dir,omitempt"`                         // Base directory for the stage. This field overwrites the DefaultBaseDir in pipeline's definition.
 	BuildEnv          map[string]string `json:"build-env" bson:"build-env,omitempt"`                       // Variables to be used in the stage build. They will be concatenated with the default variables defined in the pipeline, overwriting them if repeated.
@@ -59,7 +61,7 @@ func (stage *Stage) run(index int, pipeline Pipeline, stdin string) (StageExecut
 	// Precisa adicionar uma variável que permita identificar se houve sucesso ou não
 	ser.StartTime = time.Now()
 	{
-		log.Printf("### Setting up stage %s\n", stage.internalID)
+		log.Printf("### [%s] Setting up ...\n", stage.internalID)
 		c, err := stage.setup(pipeline)
 		ser.SetupResult = c
 		if err != nil {
@@ -67,11 +69,11 @@ func (stage *Stage) run(index int, pipeline Pipeline, stdin string) (StageExecut
 			log.Printf("### Error setting up stage %s:%v\n\n", stage.internalID, err)
 			return ser, err
 		}
-		log.Printf("### Stage %s set up successfully!\n\n", stage.internalID)
+		log.Printf("### [%s] Set up completed successfully!\n\n", stage.internalID)
 	}
 	ser.Stage = *stage
 	{
-		log.Printf("### Building stage %s\n", stage.internalID)
+		log.Printf("### [%s] Building/Pulling image %s from %s ...\n", stage.internalID, stage.ContainerID, filepath.Join(stage.BaseDir, stage.Dir))
 		c, err := stage.buildImage()
 		ser.BuildResult = c
 		if err != nil {
@@ -79,10 +81,10 @@ func (stage *Stage) run(index int, pipeline Pipeline, stdin string) (StageExecut
 			log.Printf("### Error building stage %s:%v\n\n", stage.internalID, err)
 			return ser, err
 		}
-		log.Printf("### Stage %s built successfully!\n\n", stage.internalID)
+		log.Printf("### [%s] Image %s built/pulled sucessfully!\n\n", stage.internalID, stage.ContainerID)
 	}
 	{
-		log.Printf("### Running stage %s\n", stage.internalID)
+		log.Printf("### [%s] Running ...\n", stage.internalID)
 		c, err := stage.runImage(stdin)
 		ser.RunResult = c
 		if err != nil {
@@ -90,10 +92,10 @@ func (stage *Stage) run(index int, pipeline Pipeline, stdin string) (StageExecut
 			log.Printf("### Error running stage %s:%v\n\n", stage.internalID, err)
 			return ser, err
 		}
-		log.Printf("### Stage %s ran successfully!\n\n", stage.internalID)
+		log.Printf("### [%s] Run completed successfully!\n\n", stage.internalID)
 	}
 	{
-		log.Printf("### Tearing down stage %s\n", stage.internalID)
+		log.Printf("### [%s] Tearing down ...\n", stage.internalID)
 		c, err := stage.teardown()
 		ser.TeardownResult = c
 		if err != nil {
@@ -101,7 +103,7 @@ func (stage *Stage) run(index int, pipeline Pipeline, stdin string) (StageExecut
 			log.Printf("### Error tearing down stage %s:%v\n\n", stage.internalID, err)
 			return ser, err
 		}
-		log.Printf("### Stage %s tore down successfully!\n\n", stage.internalID)
+		log.Printf("### [%s] Tear down completed successfully!\n\n", stage.internalID)
 	}
 	// 'index+1' because the index starts from 0.
 	log.Printf("## Stage %s [%d/%d] executed successfully!\n\n", stage.internalID, stage.index, len(pipeline.Stages))
@@ -160,7 +162,14 @@ func (stage *Stage) setup(pipeline Pipeline) (CmdResult, error) {
 }
 
 func (stage *Stage) buildImage() (CmdResult, error) {
-	r, err := buildImage(stage.ContainerID, stage.BaseDir, stage.Dir, stage.BuildEnv)
+	var err error
+	var r CmdResult
+	switch {
+	case stage.Image != "":
+		r, err = pullImage(stage.Image, stage.BaseDir, stage.Dir)
+	default:
+		r, err = buildImage(stage.ContainerID, stage.BaseDir, stage.Dir, stage.BuildEnv)
+	}
 	if err != nil {
 		return r, fmt.Errorf("error when building image: %w", err)
 	}
@@ -171,7 +180,11 @@ func (stage *Stage) buildImage() (CmdResult, error) {
 }
 
 func (stage *Stage) runImage(stdin string) (CmdResult, error) {
-	r, err := runImage(stage.ContainerID, stage.BaseDir, stage.Dir, stage.VolumeName, stage.VolumeDir, stdin, stage.RunEnv)
+	image := stage.Image
+	if image == "" {
+		image = stage.ContainerID
+	}
+	r, err := runImage(image, stage.BaseDir, stage.Dir, stage.VolumeName, stage.VolumeDir, stdin, stage.RunEnv)
 	if err != nil {
 		return r, fmt.Errorf("error when running image: %s", err)
 	}
@@ -199,6 +212,14 @@ func (stage *Stage) teardown() (CmdResult, error) {
 	return CmdResult{
 		ExitStatus: int(status.OK),
 	}, nil
+}
+
+// validate checks whether the stage specification is valid.
+func (stage *Stage) validateSpec() error {
+	if stage.Repo != "" && stage.Image != "" {
+		return fmt.Errorf("invalid stage configuration: repo and image can not be set at the same time")
+	}
+	return nil
 }
 
 func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
