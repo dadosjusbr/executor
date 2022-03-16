@@ -11,6 +11,10 @@ import (
 	"github.com/dadosjusbr/executor/status"
 )
 
+const (
+	defaultRunSuccessCode int = 0 // default value when the list of codes meaning success is not defines.
+)
+
 // StageExecutionResult represents information about the execution of a stage.
 type StageExecutionResult struct {
 	Stage          Stage       `json:"stage" bson:"stage,omitempty"`                   // Name of stage.
@@ -37,6 +41,7 @@ type Stage struct {
 	ContainerID       string            `json:"container-id" bson:"container-id,omitempty"`                // ID of the container running used to run the stage.
 	VolumeName        string            `json:"volume-name" bson:"volume-name,omitempty"`                  // Name of the shared volume.
 	VolumeDir         string            `json:"volume-dir" bson:"volume-dir,omitempty"`                    // Directory of the shared volume.
+	RunSuccessCodes   []int             `json:"run-success-codes" bson:"run-success-codes,omitempty"`      // List of exit codes that mean the stage has been successfully excecuted.
 
 	internalID string // Stage internal identification.
 	index      int    // Stage position in the pipeline.
@@ -127,6 +132,9 @@ func (stage *Stage) setup(pipeline Pipeline) (CmdResult, error) {
 	if stage.VolumeDir == "" {
 		stage.VolumeDir = pipeline.VolumeDir
 	}
+	if len(stage.RunSuccessCodes) == 0 {
+		stage.RunSuccessCodes = []int{defaultRunSuccessCode}
+	}
 
 	// if there the field "repo" is set for the stage, clone it and update
 	// its baseDir and commit id.
@@ -188,7 +196,7 @@ func (stage *Stage) runImage(stdin string) (CmdResult, error) {
 	if err != nil {
 		return r, fmt.Errorf("error when running image: %s", err)
 	}
-	if status.Code(r.ExitStatus) != status.OK {
+	if !contains(stage.RunSuccessCodes, r.ExitStatus) {
 		return r, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", r.ExitStatus, status.Text(status.Code(r.ExitStatus)), stage.internalID)
 	}
 	return r, nil
@@ -232,4 +240,13 @@ func mergeEnv(defaultEnv, stageEnv map[string]string) map[string]string {
 		env[k] = v
 	}
 	return env
+}
+
+func contains(succCodes []int, s int) bool {
+	for _, c := range succCodes {
+		if s == c {
+			return true
+		}
+	}
+	return false
 }
