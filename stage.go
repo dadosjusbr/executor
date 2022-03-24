@@ -192,10 +192,7 @@ func (stage *Stage) runImage(stdin string) (CmdResult, error) {
 	if image == "" {
 		image = stage.ContainerID
 	}
-	r, err := runImage(image, stage.BaseDir, stage.Dir, stage.VolumeName, stage.VolumeDir, stdin, stage.RunEnv)
-	if err != nil {
-		return r, fmt.Errorf("error when running image: %s", err)
-	}
+	r, _ := runImage(image, stage.BaseDir, stage.Dir, stage.VolumeName, stage.VolumeDir, stdin, stage.RunEnv)
 	if !contains(stage.RunSuccessCodes, r.ExitStatus) {
 		return r, fmt.Errorf("error when running image: Status code %d(%s) when running image for %s", r.ExitStatus, status.Text(status.Code(r.ExitStatus)), stage.internalID)
 	}
